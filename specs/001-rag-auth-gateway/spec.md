@@ -20,6 +20,17 @@
 - Q: Um cliente pode ter mais de um negócio? → A: Não; cada cliente tem no máximo um negócio.
 - Q: Como o código de acesso é usado nas requisições? → A: Vai apenas dentro do token JWT; o
   cliente não o envia separadamente.
+- Q: Quais informações o cliente informa ao cadastrar o negócio? → A: Nome, descrição, e-mail,
+  endereço (linha única com rua, número, bairro e cidade), telefone e detalhes (texto livre).
+- Q: O cliente acessa o negócio como "meu negócio" ou pelo identificador? → A: Apenas como "meu
+  negócio": o cliente é identificado pelo token, sem identificador do negócio na requisição.
+- Q: A API deve limitar tentativas de login seguidas com senha errada? → A: Não nesta versão.
+- Q: O código de acesso é lido/digitado por pessoas ou só circula entre sistemas? → A: Só entre
+  sistemas: identificador opaco com tamanho fixo de 12 caracteres aleatórios, sem preocupação
+  com leitura humana.
+- Q: Ao remover o negócio, os dados são apagados de vez ou mantidos como removidos? → A: Remoção
+  definitiva nesta API e na API de recursos RAG; o cliente pode cadastrar um novo negócio em
+  seguida.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -69,8 +80,11 @@ e com token válido, verificando respectivamente 401, 401, 401 e acesso permitid
    malformado, **Then** a resposta é HTTP 401 Unauthorized.
 3. **Given** um token expirado, **When** o cliente o usa em uma rota protegida, **Then** a resposta
    é HTTP 401 Unauthorized.
-4. **Given** um token válido de um cliente, **When** ele tenta acessar recurso que pertence a
-   outro cliente, **Then** a resposta é HTTP 403 Forbidden.
+4. **Given** um token válido de um cliente, **When** ele acessa as operações de negócio, **Then**
+   só o negócio do próprio cliente identificado pelo token é afetado, pois a requisição não aceita
+   identificador de negócio.
+5. **Given** um token válido, **When** a requisição pede uma operação que o cliente não tem
+   permissão para fazer, **Then** a resposta é HTTP 403 Forbidden.
 
 ---
 
@@ -91,20 +105,19 @@ que os dados guardados nesta API refletem o resultado.
 
 **Acceptance Scenarios**:
 
-1. **Given** um cliente autenticado, **When** ele cadastra um negócio com nome e descrição
-   válidos, **Then** a operação é encaminhada à API de recursos RAG com o token JWT do cliente e o
+1. **Given** um cliente autenticado, **When** ele cadastra um negócio com nome, descrição, e-mail,
+   endereço, telefone e detalhes válidos, **Then** a operação é encaminhada à API de recursos RAG com o token JWT do cliente e o
    cabeçalho `x-api-key`, o negócio é guardado associado a ele como dono e o negócio criado é
    retornado.
 2. **Given** um cliente autenticado que já possui um negócio, **When** ele tenta cadastrar outro,
    **Then** recebe HTTP 409 com mensagem em português e nada é encaminhado à API de recursos RAG.
-3. **Given** um cliente autenticado dono de um negócio, **When** ele consulta, altera ou remove
-   esse negócio, **Then** a operação é concluída e o resultado é retornado.
-4. **Given** um cliente autenticado, **When** ele tenta consultar, alterar ou remover recurso de
-   outro cliente, **Then** recebe HTTP 403 e nada é encaminhado à API de recursos RAG.
-5. **Given** dados inválidos na criação ou alteração, **When** o cliente envia a requisição,
+3. **Given** um cliente autenticado que possui um negócio, **When** ele consulta, altera ou remove
+   o "meu negócio", **Then** a operação é concluída sobre o negócio dele e o resultado é retornado.
+4. **Given** dados inválidos na criação ou alteração, **When** o cliente envia a requisição,
    **Then** recebe HTTP 400 com os detalhes de validação e nada é encaminhado à API de recursos RAG.
-6. **Given** um identificador de recurso inexistente, **When** o cliente tenta consultá-lo,
-   alterá-lo ou removê-lo, **Then** recebe HTTP 404 com mensagem em português.
+5. **Given** um cliente autenticado que ainda não cadastrou negócio (ou já o removeu), **When** ele
+   tenta consultar, alterar ou remover o "meu negócio", **Then** recebe HTTP 404 com mensagem em
+   português informando que não há negócio cadastrado.
 
 ---
 
@@ -180,23 +193,34 @@ caso.
   requisição a rotas protegidas.
 - **FR-010**: O sistema MUST responder HTTP 401 a requisições sem token, com token inválido,
   malformado, expirado ou pertencente a conta inexistente.
-- **FR-011**: O sistema MUST responder HTTP 403 quando o token for válido, mas o cliente não for o
-  dono do recurso solicitado.
+- **FR-011**: O sistema MUST responder HTTP 403 quando o token for válido, mas o cliente não tiver
+  permissão para a operação solicitada. No gerenciamento do negócio, o acesso ao negócio de outro
+  cliente é impedido por desenho (FR-013), pois não há identificador de negócio na requisição.
 - **FR-012**: Cadastro e login MUST ser as únicas rotas acessíveis sem token.
 
 **Gerenciamento do negócio**
 
 - **FR-013**: Clientes autenticados MUST poder criar, consultar, alterar e remover o seu negócio.
-- **FR-014**: O sistema MUST persistir os dados completos de cada negócio (nome, descrição, dono e
-  datas), mantendo uma cópia equivalente à registrada na API de recursos RAG. Consultas MUST ser
+  As operações MUST atuar sobre o "meu negócio", identificado exclusivamente pelo cliente do
+  token; as requisições MUST NOT receber identificador de negócio. Sem negócio cadastrado,
+  consulta, alteração e remoção MUST retornar HTTP 404.
+- **FR-014**: O sistema MUST persistir os dados completos de cada negócio (nome, descrição, e-mail,
+  endereço, telefone, detalhes, dono e datas), mantendo uma cópia equivalente à registrada na API de recursos RAG. Consultas MUST ser
   atendidas a partir dos dados persistidos nesta API.
 - **FR-015**: Negócio MUST ser um cadastro separado da conta do cliente, criado somente por um
   cliente já cadastrado e autenticado, e pertencer a um único cliente. Negócio é um recurso único
   que abrange serviço, empresa, loja, mão de obra ou qualquer outra atividade, sem categoria ou
   tipo.
 - **FR-016**: Cada cliente MUST ter no máximo um negócio. A tentativa de cadastrar um segundo
-  negócio MUST retornar HTTP 409, sem encaminhamento à API de recursos RAG. Após remover o seu
-  negócio, o cliente MUST poder cadastrar um novo.
+  negócio MUST retornar HTTP 409, sem encaminhamento à API de recursos RAG. A remoção do negócio
+  MUST ser definitiva: após a confirmação da API de recursos RAG, os dados do negócio MUST ser
+  apagados desta API, sem cópia marcada como removida e sem possibilidade de recuperação. Após
+  remover o seu negócio, o cliente MUST poder cadastrar um novo imediatamente.
+- **FR-016a**: Os dados do negócio MUST seguir estas regras: nome obrigatório (até 150
+  caracteres); descrição obrigatória (até 1.000 caracteres); e-mail opcional, em formato válido
+  quando informado; endereço opcional, em uma única linha de texto livre com rua, número, bairro e
+  cidade (até 300 caracteres); telefone opcional, apenas dígitos com DDD (10 ou 11 dígitos, aceitando
+  máscara na entrada); detalhes opcional, texto livre informado pelo cliente (até 2.000 caracteres).
 - **FR-017**: O sistema MUST validar os dados de entrada antes de encaminhar qualquer operação;
   dados inválidos MUST retornar HTTP 400 com campo e mensagem de cada erro, sem encaminhamento.
 
@@ -229,20 +253,23 @@ caso.
 - **FR-025**: O sistema MUST gerar automaticamente, no cadastro, um código de acesso único e
   exclusivo para cada cliente, persistido junto à conta; dois clientes MUST NOT compartilhar o
   mesmo código, e o código MUST NOT ser reutilizado mesmo após remoção da conta.
-- **FR-026**: O código de acesso MUST ser imutável, não adivinhável a partir de outros dados do
-  cliente (e-mail, nome, sequência) e retornado ao cliente no cadastro e no login.
+- **FR-026**: O código de acesso MUST ser um identificador opaco com exatamente 12 caracteres
+  alfanuméricos (letras maiúsculas, minúsculas e dígitos) gerados aleatoriamente, imutável, não
+  adivinhável a partir de outros dados do cliente (e-mail, nome, sequência) e retornado ao cliente
+  no cadastro e no login. O código circula apenas entre sistemas e não é feito para ser lido ou
+  digitado por pessoas.
 - **FR-027**: O código de acesso MUST ser incluído no token JWT emitido no login e é a forma de
   identificar o cliente nas requisições seguintes; o cliente MUST NOT precisar enviá-lo separadamente.
   A API de recursos RAG identifica o cliente pelo código de acesso contido no token encaminhado.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Cliente**: pessoa que usa o sistema. Atributos: identificador, código de acesso (único,
-  exclusivo e imutável), nome, e-mail (único), senha em hash, data de criação. Possui zero ou um
+- **Cliente**: pessoa que usa o sistema. Atributos: identificador, código de acesso (opaco,
+  12 caracteres alfanuméricos aleatórios, único, exclusivo e imutável), nome, e-mail (único), senha em hash, data de criação. Possui zero ou um
   negócio.
 - **Negócio**: atividade cadastrada pelo cliente (serviço, empresa, loja, mão de obra etc.), em
-  cadastro separado da conta e sem categoria. Atributos mínimos: identificador, nome, descrição,
-  dono (Cliente), datas de criação/atualização. Pertence a um único cliente.
+  cadastro separado da conta e sem categoria. Atributos: identificador, nome, descrição, e-mail,
+  endereço (linha única), telefone, detalhes, dono (Cliente), datas de criação/atualização. Pertence a um único cliente.
 - **Token de acesso**: credencial temporária emitida no login; contém o código de acesso do
   cliente e tem expiração. Não é persistido.
 
@@ -252,8 +279,8 @@ caso.
 
 - **SC-001**: Um cliente novo consegue se cadastrar e fazer login em menos de 1 minuto.
 - **SC-002**: 100% das requisições a rotas protegidas sem token válido são rejeitadas com 401, e
-  100% das tentativas de acessar recurso de outro cliente são rejeitadas com 403 (verificado por
-  testes automatizados em todas as rotas protegidas).
+  em 100% dos testes com dois clientes cada um só consegue ler, alterar ou remover o próprio
+  negócio (verificado por testes automatizados em todas as rotas protegidas).
 - **SC-003**: 100% das requisições com dados inválidos retornam 400 com o detalhe de cada campo
   inválido, sem encaminhamento à API de recursos RAG.
 - **SC-004**: 100% das chamadas encaminhadas à API de recursos RAG levam o token do cliente e a
@@ -270,11 +297,13 @@ caso.
 ## Assumptions
 
 - Login é feito por e-mail e senha; login social/SSO está fora do escopo desta versão.
-- Apenas um papel existe (cliente); não há perfil administrador nesta versão. A permissão (403) é
-  baseada exclusivamente em propriedade do recurso.
+- Apenas um papel existe (cliente); não há perfil administrador nesta versão. A permissão é
+  baseada exclusivamente em propriedade: cada cliente só opera o próprio negócio.
 - Não há refresh token, logout com revogação, recuperação de senha nem verificação de e-mail nesta
   versão; o cliente faz novo login quando o token expira.
-- Limitação de tentativas de login (rate limiting / bloqueio) está fora do escopo desta versão.
+- Limitação de tentativas de login (rate limiting / bloqueio) está fora do escopo desta versão, por
+  decisão explícita; as falhas de login continuam registradas em log (FR-024), o que permite
+  identificar abusos.
 - A API de recursos RAG aceita o token JWT emitido por esta API e a chave `x-api-key`, e expõe
   operações de criação, alteração e remoção de negócios, identificando o dono pelo código de
   acesso contido no token.
