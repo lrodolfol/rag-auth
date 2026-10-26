@@ -57,9 +57,9 @@ Todas as incógnitas foram resolvidas em [research.md](./research.md).
 | II. Responsabilidade única / ≤ 20 linhas | ✅ | ✅ | `Program.cs` dividido em extensões `Add*`/`Map*`; RAG separada em cliente + 3 handlers + tradutor de resposta; fluxo transacional em métodos por etapa |
 | III. Nomenclatura | ✅ | ✅ | Nomes descritivos (`ClientTokenForwardingHandler`, `BusinessAlreadyExistsException`); sem abreviações |
 | IV. DTOs | ✅ | ✅ | `RegisterClientRequest`, `LoginRequest`, `BusinessRequest`, `*Response`, `ApiResponse<T>`; entidades nunca saem de `Services` |
-| V. DI e abstrações | ✅ | ✅ | Tudo por interface e injeção; `HttpClient` via `IHttpClientFactory`; `TimeProvider` injetado |
+| V. DI e abstrações | ✅ | ✅ | Tudo por interface e injeção; `HttpClient` via `IHttpClientFactory`; `TimeProvider`, `IPasswordHasher<Client>` e `JsonWebTokenHandler` injetados (nunca `new` dentro dos serviços) |
 | VI. Testes (≥ 90%, integração por endpoint) | ✅ | ✅ | Projetos de teste unitário e de integração; 6 endpoints com testes de integração; gate de cobertura no `dotnet test` |
-| VII. Erros em PT + `ProblemDetails`/`ValidationProblem` | ⚠️ conflito com o envelope de `.mine/plan.md` | ✅ | Resolvido em research R1: erros são `ProblemDetails`/`ValidationProblem` nativos, embrulhados no campo `error` pelo `IProblemDetailsWriter` |
+| VII. Erros em PT + `ProblemDetails`/`ValidationProblem` | ⚠️ conflito com o envelope de `.mine/plan.md` | ✅ | Resolvido em research R1: erros são `ProblemDetails`/`ValidationProblem` nativos, embrulhados no campo `error` pelo `IProblemDetailsWriter`; títulos padrão do framework (validação, 404, 405 etc.) traduzidos para português por `CustomizeProblemDetails` |
 | Restrição: dependências justificadas | ✅ | ✅ | Tabela abaixo |
 
 **Dependências novas** (motivo e alternativa nativa descartada):
@@ -73,6 +73,14 @@ Todas as incógnitas foram resolvidas em [research.md](./research.md).
 | `coverlet.collector` | ambos de teste | Medir o gate de 90% | Sem medição nativa sem pacote |
 | `Microsoft.AspNetCore.Mvc.Testing` | IntegrationTests | Host em memória por endpoint | Processo separado + HTTP real |
 | `Testcontainers.PostgreSql` | IntegrationTests | Índice parcial, transação e erro `23505` reais | EF InMemory/SQLite não reproduzem esse comportamento |
+
+**Ferramentas e serviços externos novos** (também exigem justificativa pela constituição):
+
+| Ferramenta / serviço | Uso | Motivo | Alternativa nativa descartada |
+|---|---|---|---|
+| `dotnet-ef` 10.x (ferramenta local em `.config/dotnet-tools.json`) | Gerar e aplicar migrations | Code-first exigido em `.mine/plan.md`; versão fixada no repositório, sem instalação global | `Database.Migrate()` na inicialização (aplica schema sem revisão, arriscado em UAT/produção) e SQL manual (contraria code-first) |
+| PostgreSQL 17 | Armazenamento durável (FR-002) | Banco exigido em `.mine/plan.md` | O .NET não traz banco embutido; SQLite não atende índice parcial + concorrência do ambiente remoto |
+| Docker + imagem `postgres:17` | Banco local e Testcontainers | Ambiente reprodutível igual ao remoto | Instalação manual do PostgreSQL na máquina (versões divergentes entre desenvolvedores e CI) |
 
 `xunit`, `xunit.runner.visualstudio` e `Microsoft.NET.Test.Sdk` vêm do template de teste e são
 exigidos pela constituição. `Microsoft.EntityFrameworkCore` entra como dependência do provider.

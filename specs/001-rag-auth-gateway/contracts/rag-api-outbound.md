@@ -50,6 +50,7 @@ Timeout: `ragApi:timeoutSeconds` (padrão 10). Sem retentativas.
 | 409 | 409 | "O serviço de recursos indicou conflito com os dados enviados." | `Warning` |
 | outro 4xx | mesmo status | "O serviço de recursos recusou a operação." | `Warning` |
 | 5xx | 502 | mensagem genérica de falha de comunicação | `Error` |
+| outro status (1xx, 3xx) | 502 | mensagem genérica de falha de comunicação | `Error` |
 | conexão recusada / DNS | 503 | "O serviço de recursos está indisponível no momento." | `Error` |
 | timeout | 504 | "O serviço de recursos demorou demais para responder." | `Error` |
 

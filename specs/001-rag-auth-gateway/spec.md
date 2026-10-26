@@ -214,7 +214,9 @@ e a possibilidade de novo cadastro com o mesmo e-mail, recebendo código de aces
   retornam 503.
 - Identificador de cliente na requisição que não é numérico ou não existe: tratado como
   divergente do cliente do token (403), sem revelar se o identificador existe.
-- Resposta da API de recursos RAG em formato inesperado: 502 com mensagem genérica.
+- Resposta da API de recursos RAG com status inesperado (fora das faixas 2xx, 4xx e 5xx, ex.: 3xx):
+  502 com mensagem genérica. O corpo das respostas 2xx não é usado; o resultado devolvido ao
+  cliente vem dos dados guardados nesta API.
 - Geração de código de acesso que coincida com o de outro cliente: o sistema deve gerar outro
   código, nunca atribuindo o mesmo código a dois clientes.
 - Dois cadastros simultâneos com o mesmo e-mail: apenas um é aceito; o outro recebe 409.
@@ -286,9 +288,11 @@ e a possibilidade de novo cadastro com o mesmo e-mail, recebendo código de aces
 - **FR-019**: O endereço da API de recursos RAG e a chave `x-api-key` MUST ser configuráveis por
   ambiente e nunca expostos ao cliente nem registrados em logs.
 - **FR-020**: O sistema MUST interpretar a resposta da API de recursos RAG e devolver ao cliente o
-  resultado no contrato desta API: sucesso com o recurso; erros do cliente (4xx) com o mesmo status
-  e mensagem em português; erros internos ou resposta inesperada com 502; indisponibilidade com
-  503; tempo esgotado com 504.
+  resultado no contrato desta API: sucesso com o recurso (lido dos dados guardados nesta API);
+  erros do cliente (4xx, exceto 401 e 403) com o mesmo status e mensagem em português; 401 ou 403
+  (chave `x-api-key` ou credencial rejeitada pela API RAG, falha de integração) com 502 e log;
+  erros internos (5xx) ou status fora das faixas 2xx/4xx/5xx com 502; indisponibilidade com 503;
+  tempo esgotado com 504.
 - **FR-021**: O sistema MUST aplicar tempo limite configurável às chamadas à API de recursos RAG
   (padrão: 10 segundos).
 - **FR-022**: Os dados persistidos nesta API MUST ser alterados somente após a API de recursos RAG
@@ -314,7 +318,8 @@ e a possibilidade de novo cadastro com o mesmo e-mail, recebendo código de aces
   digitado por pessoas.
 - **FR-027**: O código de acesso MUST ser incluído no token JWT emitido no login e é a forma de
   identificar o cliente nas requisições seguintes; o cliente MUST NOT precisar enviá-lo separadamente.
-  A API de recursos RAG identifica o cliente pelo código de acesso contido no token encaminhado.
+  Nas chamadas à API de recursos RAG, o código de acesso é enviado no corpo da requisição (campo
+  `user_code`), que é como a API RAG identifica o dono; o token encaminhado também o contém.
 - **FR-028**: O cadastro e o login MUST retornar o identificador numérico do cliente nesta API,
   usado para indicar o cliente nas operações autenticadas (FR-011).
 
@@ -375,9 +380,13 @@ e a possibilidade de novo cadastro com o mesmo e-mail, recebendo código de aces
   identificar abusos.
 - A API de recursos RAG aceita o token JWT emitido por esta API e a chave `x-api-key`, e expõe
   operações de criação, alteração e remoção de negócios, identificando o dono pelo código de
-  acesso contido no token.
+  acesso enviado no campo `user_code` do corpo.
 - Divergências entre os dados desta API e os da API de recursos RAG causadas por alterações feitas
   diretamente na API RAG estão fora do escopo; esta API é o único ponto de entrada para alterações.
+- Risco residual aceito: se a gravação local falhar depois de a API de recursos RAG confirmar a
+  operação (caso raro), a criação é compensada com uma remoção na API RAG; em alterações e remoções
+  (de negócio ou de conta) não há como restaurar o estado anterior na API RAG, então a divergência
+  é registrada em log de erro com o correlation-id para correção manual.
 - Alteração dos dados da conta (nome, e-mail, senha) está fora do escopo desta versão; a remoção
   da própria conta está no escopo (FR-029, FR-030).
 - A conta removida é mantida apenas como registro inativo, para garantir que identificador e

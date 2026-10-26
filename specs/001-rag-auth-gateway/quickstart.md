@@ -9,7 +9,7 @@ Guia para provar que a feature funciona. Contratos em [contracts/](./contracts/)
 
 - .NET SDK 10.0.x (`dotnet --list-sdks`)
 - Docker (PostgreSQL local e Testcontainers nos testes de integração)
-- Ferramenta EF: `dotnet tool install --global dotnet-ef`
+- Ferramenta EF (local, versão fixada em `.config/dotnet-tools.json`): `dotnet tool restore`
 
 ## 1. Banco local
 

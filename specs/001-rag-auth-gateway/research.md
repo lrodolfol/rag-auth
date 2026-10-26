@@ -154,6 +154,7 @@ snake_case conforme `.mine/plan.md`. Tradução, em `try/catch` dentro do `RagAp
 | 401/403 da RAG (chave rejeitada) | `RagApiIntegrationException` + log `Error` | 502 |
 | Outro 4xx | `RagApiRejectedException(status)` | mesmo status, mensagem em PT |
 | 5xx | `RagApiIntegrationException` | 502 |
+| Outro status (1xx, 3xx) | `RagApiIntegrationException` | 502 |
 | `HttpRequestException` (conexão) | `RagApiUnavailableException` | 503 |
 | `TaskCanceledException` por timeout | `RagApiTimeoutException` | 504 |
 
