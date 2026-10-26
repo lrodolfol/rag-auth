@@ -32,6 +32,18 @@
   definitiva nesta API e na API de recursos RAG; o cliente pode cadastrar um novo negócio em
   seguida.
 
+### Session 2026-10-25 (revisão pós-plano)
+
+- Q: O cliente pode remover a própria conta? → A: Sim. A remoção da conta passa a fazer parte do
+  escopo: o negócio do cliente (se existir) é removido também na API de recursos RAG e a conta é
+  marcada como removida; tokens dela deixam de valer, o e-mail fica livre para novo cadastro e o
+  código de acesso nunca é reutilizado.
+- Q: Existe uma operação para consultar o negócio? → A: Não. O login já devolve os dados do
+  negócio do cliente (quando existir), a partir dos dados guardados nesta API.
+- Q: Como o cliente é indicado nas operações autenticadas? → A: Pelo identificador numérico do
+  cliente nesta API, devolvido no cadastro e no login. Se ele não corresponder ao cliente do token,
+  a operação é negada (HTTP 403).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Cadastro e login do cliente (Priority: P1)
@@ -49,15 +61,20 @@ toda a camada de segurança.
 
 1. **Given** um e-mail ainda não cadastrado, **When** o cliente envia nome, e-mail e senha válidos,
    **Then** a conta é criada e persistida, um código de acesso único e exclusivo é gerado para o
-   cliente e retornado, e a resposta não contém a senha.
+   cliente, o identificador do cliente e o código de acesso são retornados, e a resposta não
+   contém a senha.
 2. **Given** um e-mail já cadastrado, **When** alguém tenta cadastrar outra conta com o mesmo
    e-mail, **Then** o cadastro é recusado com mensagem de conflito em português.
 3. **Given** dados de cadastro inválidos (e-mail mal formado, senha curta, nome vazio), **When** o
    cliente envia o cadastro, **Then** recebe HTTP 400 com o campo e a mensagem de cada erro.
 4. **Given** uma conta existente, **When** o cliente faz login com credenciais corretas, **Then**
-   recebe um token JWT de acesso com a data de expiração, que carrega seu código de acesso.
+   recebe um token JWT de acesso com a data de expiração, que carrega seu código de acesso, além
+   do seu identificador de cliente.
 5. **Given** uma conta existente, **When** o cliente faz login com senha incorreta ou e-mail
    inexistente, **Then** recebe HTTP 401 com mensagem genérica que não revela qual dado está errado.
+6. **Given** um cliente que possui negócio cadastrado, **When** ele faz login com sucesso, **Then**
+   a resposta inclui os dados do seu negócio, lidos desta API (mesmo com a API de recursos RAG
+   indisponível); se ele não tiver negócio, a resposta indica que não há negócio.
 
 ---
 
@@ -80,18 +97,19 @@ e com token válido, verificando respectivamente 401, 401, 401 e acesso permitid
    malformado, **Then** a resposta é HTTP 401 Unauthorized.
 3. **Given** um token expirado, **When** o cliente o usa em uma rota protegida, **Then** a resposta
    é HTTP 401 Unauthorized.
-4. **Given** um token válido de um cliente, **When** ele acessa as operações de negócio, **Then**
-   só o negócio do próprio cliente identificado pelo token é afetado, pois a requisição não aceita
-   identificador de negócio.
-5. **Given** um token válido, **When** a requisição pede uma operação que o cliente não tem
-   permissão para fazer, **Then** a resposta é HTTP 403 Forbidden.
+4. **Given** um token válido de um cliente, **When** ele acessa as operações de negócio informando
+   o próprio identificador de cliente, **Then** só o negócio desse cliente é afetado, pois a
+   requisição não aceita identificador de negócio.
+5. **Given** um token válido, **When** a requisição informa o identificador de outro cliente (em
+   operação de negócio ou de remoção de conta), **Then** a resposta é HTTP 403 Forbidden e nada é
+   alterado nem encaminhado à API de recursos RAG.
 
 ---
 
 ### User Story 3 - Gerenciamento do negócio do cliente (Priority: P2)
 
-Depois de ter sua conta, o cliente autenticado cadastra, consulta, altera e remove o seu negócio;
-cada cliente tem no máximo um negócio. "Negócio" é qualquer atividade do cliente (serviço, empresa, loja, mão de obra etc.) e é
+Depois de ter sua conta, o cliente autenticado cadastra, altera e remove o seu negócio, e o vê na
+resposta do login; cada cliente tem no máximo um negócio. "Negócio" é qualquer atividade do cliente (serviço, empresa, loja, mão de obra etc.) e é
 um cadastro à parte da conta, sem categoria ou tipo. A API valida a requisição, garante que o
 cliente é o dono do negócio, guarda os dados do negócio e
 encaminha as alterações para a API de recursos RAG, devolvendo ao cliente o resultado interpretado.
@@ -99,7 +117,8 @@ encaminha as alterações para a API de recursos RAG, devolvendo ao cliente o re
 **Why this priority**: É o valor de negócio entregue ao cliente, mas depende das histórias 1 e 2.
 
 **Independent Test**: Com um cliente autenticado e a API de recursos RAG disponível (ou simulada),
-executar o ciclo completo criar → consultar → alterar → remover do negócio, verificando
+executar o ciclo completo criar → fazer login (negócio na resposta) → alterar → remover do
+negócio, verificando
 que cada criação, alteração e remoção foi encaminhada com o token do cliente e a chave de API, e
 que os dados guardados nesta API refletem o resultado.
 
@@ -111,13 +130,14 @@ que os dados guardados nesta API refletem o resultado.
    retornado.
 2. **Given** um cliente autenticado que já possui um negócio, **When** ele tenta cadastrar outro,
    **Then** recebe HTTP 409 com mensagem em português e nada é encaminhado à API de recursos RAG.
-3. **Given** um cliente autenticado que possui um negócio, **When** ele consulta, altera ou remove
-   o "meu negócio", **Then** a operação é concluída sobre o negócio dele e o resultado é retornado.
+3. **Given** um cliente autenticado que possui um negócio, **When** ele altera ou remove o "meu
+   negócio", **Then** a operação é concluída sobre o negócio dele e o resultado é retornado; o
+   próximo login reflete a alteração ou a ausência do negócio.
 4. **Given** dados inválidos na criação ou alteração, **When** o cliente envia a requisição,
    **Then** recebe HTTP 400 com os detalhes de validação e nada é encaminhado à API de recursos RAG.
 5. **Given** um cliente autenticado que ainda não cadastrou negócio (ou já o removeu), **When** ele
-   tenta consultar, alterar ou remover o "meu negócio", **Then** recebe HTTP 404 com mensagem em
-   português informando que não há negócio cadastrado.
+   tenta alterar ou remover o "meu negócio", **Then** recebe HTTP 404 com mensagem em português
+   informando que não há negócio cadastrado.
 
 ---
 
@@ -148,6 +168,35 @@ caso.
 
 ---
 
+### User Story 5 - Remoção da própria conta (Priority: P3)
+
+O cliente autenticado remove a própria conta. Se ele tiver negócio, o negócio é removido também na
+API de recursos RAG; depois a conta é marcada como removida e deixa de poder ser usada.
+
+**Why this priority**: Dá ao cliente controle sobre seus dados, mas não bloqueia o fluxo principal.
+
+**Independent Test**: Com um cliente com negócio e outro sem, remover cada conta e verificar a
+remoção na API de recursos RAG (só no primeiro caso), a rejeição do token antigo, o login recusado
+e a possibilidade de novo cadastro com o mesmo e-mail, recebendo código de acesso diferente.
+
+**Acceptance Scenarios**:
+
+1. **Given** um cliente autenticado com negócio, **When** ele remove a própria conta, **Then** a
+   remoção do negócio é encaminhada à API de recursos RAG e, após a confirmação, o negócio é apagado
+   e a conta é marcada como removida.
+2. **Given** um cliente autenticado sem negócio, **When** ele remove a própria conta, **Then** a
+   conta é marcada como removida sem nenhuma chamada à API de recursos RAG.
+3. **Given** que a API de recursos RAG falha ao remover o negócio, **When** o cliente remove a
+   própria conta, **Then** recebe o erro correspondente (User Story 4) e a conta e o negócio
+   permanecem como estavam.
+4. **Given** uma conta removida, **When** alguém usa um token dela ou tenta fazer login com ela,
+   **Then** recebe HTTP 401.
+5. **Given** uma conta removida, **When** alguém cadastra uma nova conta com o mesmo e-mail,
+   **Then** o cadastro é aceito com novo identificador e novo código de acesso, nunca o da conta
+   removida.
+
+---
+
 ### Edge Cases
 
 - Token emitido para um cliente cuja conta foi removida: deve ser tratado como inválido (401).
@@ -160,8 +209,11 @@ caso.
 - Falha na API de recursos RAG durante criação, alteração ou remoção: os dados guardados nesta API
   não podem ficar diferentes dos da API RAG (o negócio não aparece se não existir na API RAG, e
   uma alteração ou remoção recusada não é aplicada localmente).
-- API de recursos RAG indisponível: consultas continuam funcionando com os dados
-  guardados nesta API; criações, alterações e remoções retornam 503.
+- API de recursos RAG indisponível: o login continua devolvendo o negócio a partir dos dados
+  guardados nesta API; criações, alterações e remoções (inclusive a remoção de conta com negócio)
+  retornam 503.
+- Identificador de cliente na requisição que não é numérico ou não existe: tratado como
+  divergente do cliente do token (403), sem revelar se o identificador existe.
 - Resposta da API de recursos RAG em formato inesperado: 502 com mensagem genérica.
 - Geração de código de acesso que coincida com o de outro cliente: o sistema deve gerar outro
   código, nunca atribuindo o mesmo código a dois clientes.
@@ -193,20 +245,22 @@ caso.
   requisição a rotas protegidas.
 - **FR-010**: O sistema MUST responder HTTP 401 a requisições sem token, com token inválido,
   malformado, expirado ou pertencente a conta inexistente.
-- **FR-011**: O sistema MUST responder HTTP 403 quando o token for válido, mas o cliente não tiver
-  permissão para a operação solicitada. No gerenciamento do negócio, o acesso ao negócio de outro
-  cliente é impedido por desenho (FR-013), pois não há identificador de negócio na requisição.
+- **FR-011**: As operações autenticadas MUST receber o identificador numérico do cliente (o mesmo
+  devolvido no cadastro e no login). O sistema MUST responder HTTP 403, sem alterar dados nem
+  chamar a API de recursos RAG, quando esse identificador não corresponder ao cliente do token
+  válido (inclusive identificador inexistente).
 - **FR-012**: Cadastro e login MUST ser as únicas rotas acessíveis sem token.
 
 **Gerenciamento do negócio**
 
-- **FR-013**: Clientes autenticados MUST poder criar, consultar, alterar e remover o seu negócio.
-  As operações MUST atuar sobre o "meu negócio", identificado exclusivamente pelo cliente do
-  token; as requisições MUST NOT receber identificador de negócio. Sem negócio cadastrado,
-  consulta, alteração e remoção MUST retornar HTTP 404.
+- **FR-013**: Clientes autenticados MUST poder criar, alterar e remover o seu negócio. As
+  operações MUST atuar sobre o "meu negócio" do cliente do token; as requisições MUST NOT receber
+  identificador de negócio. Sem negócio cadastrado, alteração e remoção MUST retornar HTTP 404.
+  Não há operação própria de consulta do negócio.
 - **FR-014**: O sistema MUST persistir os dados completos de cada negócio (nome, descrição, e-mail,
-  endereço, telefone, detalhes, dono e datas), mantendo uma cópia equivalente à registrada na API de recursos RAG. Consultas MUST ser
-  atendidas a partir dos dados persistidos nesta API.
+  endereço, telefone, detalhes, dono e datas), mantendo uma cópia equivalente à registrada na API
+  de recursos RAG. A resposta de login bem-sucedido MUST incluir os dados do negócio do cliente,
+  lidos desta API, ou indicar que ele não possui negócio.
 - **FR-015**: Negócio MUST ser um cadastro separado da conta do cliente, criado somente por um
   cliente já cadastrado e autenticado, e pertencer a um único cliente. Negócio é um recurso único
   que abrange serviço, empresa, loja, mão de obra ou qualquer outra atividade, sem categoria ou
@@ -226,8 +280,8 @@ caso.
 
 **Integração com a API de recursos RAG**
 
-- **FR-018**: Criação, alteração e remoção de negócios MUST ser encaminhadas à API de
-  recursos RAG, incluindo o token JWT do cliente no cabeçalho `Authorization` e o cabeçalho
+- **FR-018**: Criação, alteração e remoção de negócios (inclusive a remoção decorrente da remoção
+  de conta, FR-029) MUST ser encaminhadas à API de recursos RAG, incluindo o token JWT do cliente no cabeçalho `Authorization` e o cabeçalho
   `x-api-key` com valor lido de variável de ambiente.
 - **FR-019**: O endereço da API de recursos RAG e a chave `x-api-key` MUST ser configuráveis por
   ambiente e nunca expostos ao cliente nem registrados em logs.
@@ -261,12 +315,26 @@ caso.
 - **FR-027**: O código de acesso MUST ser incluído no token JWT emitido no login e é a forma de
   identificar o cliente nas requisições seguintes; o cliente MUST NOT precisar enviá-lo separadamente.
   A API de recursos RAG identifica o cliente pelo código de acesso contido no token encaminhado.
+- **FR-028**: O cadastro e o login MUST retornar o identificador numérico do cliente nesta API,
+  usado para indicar o cliente nas operações autenticadas (FR-011).
+
+**Remoção da conta**
+
+- **FR-029**: O cliente autenticado MUST poder remover a própria conta. Se houver negócio, a
+  remoção dele MUST ser encaminhada à API de recursos RAG e, só após a confirmação, o negócio MUST
+  ser apagado e a conta marcada como removida; se a API RAG falhar, conta e negócio MUST
+  permanecer inalterados (FR-022). Sem negócio, a conta é marcada como removida sem chamar a API
+  RAG.
+- **FR-030**: Após a remoção, a conta MUST NOT permitir login nem aceitar tokens já emitidos (401);
+  o e-mail MUST ficar disponível para novo cadastro, e o identificador e o código de acesso da
+  conta removida MUST NOT ser atribuídos a outra conta.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Cliente**: pessoa que usa o sistema. Atributos: identificador, código de acesso (opaco,
-  12 caracteres alfanuméricos aleatórios, único, exclusivo e imutável), nome, e-mail (único), senha em hash, data de criação. Possui zero ou um
-  negócio.
+- **Cliente**: pessoa que usa o sistema. Atributos: identificador numérico (devolvido ao cliente e
+  usado nas operações autenticadas), código de acesso (opaco, 12 caracteres alfanuméricos
+  aleatórios, único, exclusivo e imutável), nome, e-mail (único entre contas ativas), senha em
+  hash, datas de criação/atualização e situação (ativa ou removida). Possui zero ou um negócio.
 - **Negócio**: atividade cadastrada pelo cliente (serviço, empresa, loja, mão de obra etc.), em
   cadastro separado da conta e sem categoria. Atributos: identificador, nome, descrição, e-mail,
   endereço (linha única), telefone, detalhes, dono (Cliente), datas de criação/atualização. Pertence a um único cliente.
@@ -279,8 +347,9 @@ caso.
 
 - **SC-001**: Um cliente novo consegue se cadastrar e fazer login em menos de 1 minuto.
 - **SC-002**: 100% das requisições a rotas protegidas sem token válido são rejeitadas com 401, e
-  em 100% dos testes com dois clientes cada um só consegue ler, alterar ou remover o próprio
-  negócio (verificado por testes automatizados em todas as rotas protegidas).
+  em 100% dos testes com dois clientes cada um só consegue alterar ou remover o próprio negócio e
+  a própria conta, recebendo 403 ao informar o identificador do outro (verificado por testes
+  automatizados em todas as rotas protegidas).
 - **SC-003**: 100% das requisições com dados inválidos retornam 400 com o detalhe de cada campo
   inválido, sem encaminhamento à API de recursos RAG.
 - **SC-004**: 100% das chamadas encaminhadas à API de recursos RAG levam o token do cliente e a
@@ -309,5 +378,9 @@ caso.
   acesso contido no token.
 - Divergências entre os dados desta API e os da API de recursos RAG causadas por alterações feitas
   diretamente na API RAG estão fora do escopo; esta API é o único ponto de entrada para alterações.
-- Alteração e remoção da conta do próprio cliente estão fora do escopo desta versão.
+- Alteração dos dados da conta (nome, e-mail, senha) está fora do escopo desta versão; a remoção
+  da própria conta está no escopo (FR-029, FR-030).
+- A conta removida é mantida apenas como registro inativo, para garantir que identificador e
+  código de acesso não sejam reaproveitados; anonimização de dados pessoais da conta removida fica
+  para uma versão futura.
 - A API deve seguir a constituição do projeto (mensagens em português, erros padronizados, DTOs).
