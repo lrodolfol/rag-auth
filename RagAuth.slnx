@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RagAuth.Api/RagAuth.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RagAuth.IntegrationTests/RagAuth.IntegrationTests.csproj" />
+    <Project Path="tests/RagAuth.UnitTests/RagAuth.UnitTests.csproj" />
+  </Folder>
+</Solution>

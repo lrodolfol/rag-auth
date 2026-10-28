@@ -61,3 +61,11 @@ nunit-*.xml
 .target/
 .vscode/
 .VS/
+
+# Testes e cobertura
+TestResults/
+coverage*/
+coverlet.runsettings
+
+# mine
+.mine/
