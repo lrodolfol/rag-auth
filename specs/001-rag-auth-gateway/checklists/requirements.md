@@ -38,4 +38,8 @@
   acesso único e exclusivo do cliente, que faltava na primeira versão.
 - Menções a JWT, `x-api-key` e códigos HTTP (400/401/403) foram mantidas porque são requisitos
   explícitos do contrato definido pelo usuário, não escolhas de implementação.
+- Revisão pós-plano 2026-10-25: remoção da própria conta entrou no escopo (User Story 5, FR-029,
+  FR-030); consulta do negócio removida — o login devolve o negócio (FR-014); operações autenticadas
+  recebem o identificador numérico do cliente, com 403 em divergência (FR-011, FR-028). Todos os
+  itens revalidados.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
