@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RagAuth.IntegrationTests.Infrastructure;
 
@@ -19,9 +23,39 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
+    public void OnlyRegisterLoginEmailConfirmationAndNewLinkAreOpen()
+    {
+        var openRoutes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+            .Select(endpoint => endpoint.RoutePattern.RawText ?? string.Empty)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "/api/v1/auth/login",
+                "/api/v1/auth/register",
+                "/api/v1/client/new-confirmation-register",
+                "/api/v1/client/{clientIdentificationHash}/confirmation-register/{keyHash}",
+            ],
+            openRoutes);
+    }
+
+    [Fact]
+    public async Task EmailConfirmationRoutesAnswerWithoutToken()
+    {
+        var confirmationResponse = await _httpClient.GetAsync($"/api/v1/client/{new string('A', 22)}/confirmation-register/{new string('B', 43)}");
+        var newLinkResponse = await _httpClient.PostAsJsonAsync("/api/v1/client/new-confirmation-register", new { email = "ana@exemplo.com" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, confirmationResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, newLinkResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task ValidTokenWithOwnClientIdIsAccepted()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         var response = await SendProbeAsync(account.ClientId.ToString(), account.AccessToken);
 
@@ -31,7 +65,7 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
     [Fact]
     public async Task RequestWithoutAuthorizationIsRejected()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         await AssertUnauthenticatedAsync(await SendProbeAsync(account.ClientId.ToString(), accessToken: null));
     }
@@ -39,7 +73,7 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
     [Fact]
     public async Task AuthorizationWithoutBearerPrefixIsRejected()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         var request = new HttpRequestMessage(HttpMethod.Get, string.Format(ProtectedProbeStartupFilter.ProbePathTemplate, account.ClientId));
         request.Headers.TryAddWithoutValidation("Authorization", account.AccessToken);
 
@@ -49,7 +83,7 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
     [Fact]
     public async Task TamperedMalformedExpiredOrForeignTokensAreRejected()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         var invalidTokens = new[]
         {
             TestTokens.TamperSignature(account.AccessToken),
@@ -69,7 +103,7 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
     [Fact]
     public async Task TokenOfRemovedAccountIsRejected()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         await factory.ExecuteInDatabaseAsync(databaseContext => databaseContext.Clients
             .Where(client => client.Id == account.ClientId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(client => client.DeletedAt, DateTimeOffset.UtcNow)));
@@ -82,8 +116,8 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
     [InlineData("abc")]
     public async Task ClientIdOfAnotherClientOrNonNumericIsForbidden(string routeClientIdKind)
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
-        var otherAccount = await TestClientAccounts.RegisterAndLoginAsync(_httpClient, "bia@exemplo.com");
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
+        var otherAccount = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient, "bia@exemplo.com");
         var routeClientId = routeClientIdKind == "other" ? otherAccount.ClientId.ToString() : "abc";
 
         var response = await SendProbeAsync(routeClientId, account.AccessToken);

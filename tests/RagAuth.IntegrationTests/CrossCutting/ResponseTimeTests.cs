@@ -20,7 +20,7 @@ public sealed class ResponseTimeTests(RagAuthApiFactory factory) : IAsyncLifetim
     [Fact]
     public async Task RegisterLoginAndTokenValidationStayUnderFiveHundredMillisecondsAtP95()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient, "medicao@exemplo.com");
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient, "medicao@exemplo.com");
         var registrationCounter = 0;
 
         var registerPercentile = await MeasurePercentile95Async(() => _httpClient.PostAsJsonAsync(
@@ -34,6 +34,8 @@ public sealed class ResponseTimeTests(RagAuthApiFactory factory) : IAsyncLifetim
             string.Format(ProtectedProbeStartupFilter.ProbePathTemplate, account.ClientId),
             account.AccessToken)));
 
+        // SC-002: o cadastro é medido com o envio de e-mail de confirmação ativo (fila + dispatcher em segundo plano).
+        await factory.EmailSender.WaitForEmailAsync("cliente1@exemplo.com", TimeSpan.FromSeconds(5));
         Assert.True(registerPercentile < MaximumPercentile95, $"p95 do cadastro: {registerPercentile.TotalMilliseconds} ms");
         Assert.True(loginPercentile < MaximumPercentile95, $"p95 do login: {loginPercentile.TotalMilliseconds} ms");
         Assert.True(probePercentile < MaximumPercentile95, $"p95 da rota protegida: {probePercentile.TotalMilliseconds} ms");

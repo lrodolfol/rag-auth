@@ -8,8 +8,16 @@ public sealed class EntityFrameworkClientRepository(AppDbContext databaseContext
     public Task<Client?> FindActiveByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default) =>
         databaseContext.Clients.FirstOrDefaultAsync(client => client.Email == normalizedEmail, cancellationToken);
 
+    public Task<Client?> FindPendingByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default) =>
+        databaseContext.Clients.FirstOrDefaultAsync(
+            client => client.Email == normalizedEmail && !client.EmailConfirmed,
+            cancellationToken);
+
     public Task<Client?> FindActiveByIdAsync(int clientId, CancellationToken cancellationToken = default) =>
         databaseContext.Clients.FirstOrDefaultAsync(client => client.Id == clientId, cancellationToken);
+
+    public Task LockForUpdateAsync(int clientId, CancellationToken cancellationToken = default) =>
+        databaseContext.Database.ExecuteSqlAsync($"SELECT 1 FROM clients WHERE id = {clientId} FOR UPDATE", cancellationToken);
 
     public void Add(Client client) => databaseContext.Clients.Add(client);
 }

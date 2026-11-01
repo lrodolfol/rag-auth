@@ -113,6 +113,16 @@ namespace RagAuth.Api.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(254)")
                         .HasColumnName("email");
 
+                    b.Property<bool>("EmailConfirmed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("emailConfirmed");
+
+                    b.Property<DateTimeOffset?>("EmailConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("emailConfirmedAt");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -142,6 +152,72 @@ namespace RagAuth.Api.Infrastructure.Persistence.Migrations
                     b.ToTable("clients", (string)null);
                 });
 
+            modelBuilder.Entity("RagAuth.Api.Domain.Entities.EmailConfirmationLink", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ClientId")
+                        .HasColumnType("integer")
+                        .HasColumnName("clientId");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiresAt");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issuedAt");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("origin");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("purpose");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revokedAt");
+
+                    b.Property<string>("Selector")
+                        .IsRequired()
+                        .HasColumnType("varchar(22)")
+                        .HasColumnName("selector");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("usedAt");
+
+                    b.Property<string>("ValidatorHash")
+                        .IsRequired()
+                        .HasColumnType("char(64)")
+                        .HasColumnName("validatorHash");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_email_confirmation_links_active_per_client")
+                        .HasFilter("\"usedAt\" IS NULL AND \"revokedAt\" IS NULL");
+
+                    b.HasIndex("Selector")
+                        .IsUnique()
+                        .HasDatabaseName("ux_email_confirmation_links_selector");
+
+                    b.HasIndex("ClientId", "IssuedAt")
+                        .HasDatabaseName("ix_email_confirmation_links_client_issued");
+
+                    b.ToTable("email_confirmation_links", (string)null);
+                });
+
             modelBuilder.Entity("RagAuth.Api.Domain.Entities.Business", b =>
                 {
                     b.HasOne("RagAuth.Api.Domain.Entities.Client", "Client")
@@ -153,9 +229,22 @@ namespace RagAuth.Api.Infrastructure.Persistence.Migrations
                     b.Navigation("Client");
                 });
 
+            modelBuilder.Entity("RagAuth.Api.Domain.Entities.EmailConfirmationLink", b =>
+                {
+                    b.HasOne("RagAuth.Api.Domain.Entities.Client", "Client")
+                        .WithMany("ConfirmationLinks")
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
             modelBuilder.Entity("RagAuth.Api.Domain.Entities.Client", b =>
                 {
                     b.Navigation("Business");
+
+                    b.Navigation("ConfirmationLinks");
                 });
 #pragma warning restore 612, 618
         }

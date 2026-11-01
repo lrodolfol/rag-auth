@@ -27,4 +27,10 @@ public static class LoggerMocks
             .Where(invocation => invocation.Method.Name == nameof(ILogger.Log))
             .Select(invocation => invocation.Arguments[2]?.ToString() ?? string.Empty)
             .ToList();
+
+    public static IReadOnlyList<int> LoggedEventIds<TCategory>(this Mock<ILogger<TCategory>> logger) =>
+        logger.Invocations
+            .Where(invocation => invocation.Method.Name == nameof(ILogger.Log))
+            .Select(invocation => ((EventId)invocation.Arguments[1]!).Id)
+            .ToList();
 }

@@ -14,6 +14,7 @@ public static class PortugueseProblemDetailsTitles
         [StatusCodes.Status404NotFound] = "Recurso não encontrado",
         [StatusCodes.Status405MethodNotAllowed] = "Método não permitido",
         [StatusCodes.Status409Conflict] = "Conflito",
+        [StatusCodes.Status410Gone] = "Link expirado",
         [StatusCodes.Status415UnsupportedMediaType] = "Tipo de conteúdo não suportado",
         [StatusCodes.Status500InternalServerError] = "Erro interno",
         [StatusCodes.Status502BadGateway] = "Falha de integração",

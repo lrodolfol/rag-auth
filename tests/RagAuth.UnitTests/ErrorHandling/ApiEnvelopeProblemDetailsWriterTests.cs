@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -69,6 +71,33 @@ public sealed class ApiEnvelopeProblemDetailsWriterTests
     }
 
     [Fact]
+    public async Task UsesRouteTemplateAsInstanceForRoutesWithSensitiveValues()
+    {
+        var endpoint = new RouteEndpoint(
+            _ => Task.CompletedTask,
+            RoutePatternFactory.Parse("/api/v1/client/{clientIdentificationHash}/confirmation-register/{keyHash}"),
+            0,
+            new EndpointMetadataCollection(new SensitiveRouteValuesMetadata()),
+            null);
+
+        var envelope = await WriteAsync(new ProblemDetails { Status = 400 }, 400, endpoint: endpoint);
+
+        Assert.Equal(
+            "/api/v1/client/{clientIdentificationHash}/confirmation-register/{keyHash}",
+            envelope.GetProperty("error").GetProperty("instance").GetString());
+    }
+
+    [Fact]
+    public async Task KeepsRequestPathAsInstanceForOrdinaryRoutes()
+    {
+        var endpoint = new RouteEndpoint(_ => Task.CompletedTask, RoutePatternFactory.Parse("/api/v1/auth/register"), 0, EndpointMetadataCollection.Empty, null);
+
+        var envelope = await WriteAsync(new ProblemDetails { Status = 400 }, 400, endpoint: endpoint);
+
+        Assert.Equal("/api/v1/auth/register", envelope.GetProperty("error").GetProperty("instance").GetString());
+    }
+
+    [Fact]
     public void CanWriteEveryProblemDetails()
     {
         var writer = CreateWriter(new ProblemDetailsOptions());
@@ -79,10 +108,12 @@ public sealed class ApiEnvelopeProblemDetailsWriterTests
     private static async Task<JsonElement> WriteAsync(
         ProblemDetails problemDetails,
         int responseStatusCode,
-        ProblemDetailsOptions? problemDetailsOptions = null)
+        ProblemDetailsOptions? problemDetailsOptions = null,
+        Endpoint? endpoint = null)
     {
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Path = "/api/v1/auth/register";
+        httpContext.SetEndpoint(endpoint);
         httpContext.Response.StatusCode = responseStatusCode;
         httpContext.Response.Body = new MemoryStream();
         var writer = CreateWriter(problemDetailsOptions ?? new ProblemDetailsOptions());

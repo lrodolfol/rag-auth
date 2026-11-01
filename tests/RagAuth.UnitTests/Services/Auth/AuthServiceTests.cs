@@ -4,10 +4,12 @@ using RagAuth.Api.Contracts.Auth;
 using RagAuth.Api.Contracts.Business;
 using RagAuth.Api.Domain.Entities;
 using RagAuth.Api.Domain.Exceptions;
+using RagAuth.Api.Infrastructure.Email;
 using RagAuth.Api.Infrastructure.Persistence;
 using RagAuth.Api.Infrastructure.Persistence.Repositories;
 using RagAuth.Api.Services.Auth;
 using RagAuth.Api.Services.Business;
+using RagAuth.Api.Services.EmailConfirmation;
 using RagAuth.UnitTests.TestDoubles;
 
 namespace RagAuth.UnitTests.Services.Auth;
@@ -20,8 +22,12 @@ public sealed class AuthServiceTests
     private readonly Mock<IAccessCodeGenerator> _accessCodeGenerator = new();
     private readonly Mock<IAccessTokenIssuer> _accessTokenIssuer = new();
     private readonly Mock<IBusinessService> _businessService = new();
+    private readonly Mock<IConfirmationLinkIssuer> _confirmationLinkIssuer = new();
+    private readonly Mock<IConfirmationEmailQueue> _confirmationEmailQueue = new();
     private readonly Mock<ILogger<AuthService>> _logger = LoggerMocks.Create<AuthService>();
+    private readonly List<string> _callOrder = [];
     private Client? _addedClient;
+    private IssuedConfirmationLink? _issuedLink;
 
     public AuthServiceTests()
     {
@@ -30,6 +36,90 @@ public sealed class AuthServiceTests
         _accessCodeGenerator.SetupSequence(generator => generator.Generate())
             .Returns("CODIGO000001").Returns("CODIGO000002").Returns("CODIGO000003")
             .Returns("CODIGO000004").Returns("CODIGO000005").Returns("CODIGO000006");
+        _confirmationLinkIssuer.Setup(issuer => issuer.Issue(It.IsAny<Client>(), It.IsAny<string>()))
+            .Returns<Client, string>(CreateIssuedLink);
+        _confirmationEmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>()))
+            .Callback(() => _callOrder.Add("enqueue"))
+            .Returns(true);
+        _unitOfWork.Setup(unitOfWork => unitOfWork.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => _callOrder.Add("save"))
+            .Returns(Task.CompletedTask);
+    }
+
+    [Fact]
+    public async Task RegisterCreatesPendingAccountWithRegistrationLinkBeforeSaving()
+    {
+        _clientRepository.Setup(repository => repository.Add(It.IsAny<Client>())).Callback<Client>(client =>
+        {
+            client.Id = 42;
+            _addedClient = client;
+        });
+
+        await CreateService().RegisterAsync(CreateRegisterRequest());
+
+        Assert.False(_addedClient!.EmailConfirmed);
+        Assert.Null(_addedClient.EmailConfirmedAt);
+        _confirmationLinkIssuer.Verify(issuer => issuer.Issue(_addedClient, ConfirmationLinkOrigin.Registration), Times.Once());
+        Assert.Equal(["issue", "save", "enqueue"], _callOrder);
+        _confirmationEmailQueue.Verify(queue => queue.TryEnqueue(It.Is<ConfirmationEmailMessage>(message =>
+            message.ClientId == 42 && message.ConfirmationUrl == _issuedLink!.Message.ConfirmationUrl)), Times.Once());
+    }
+
+    [Fact]
+    public async Task RegisterDoesNotEnqueueEmailWhenSaveFails()
+    {
+        _unitOfWork.Setup(unitOfWork => unitOfWork.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(UniqueViolationExceptions.For(UniqueIndexNames.ActiveClientEmail));
+
+        await Assert.ThrowsAsync<EmailAlreadyRegisteredException>(() => CreateService().RegisterAsync(CreateRegisterRequest()));
+
+        _confirmationEmailQueue.Verify(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>()), Times.Never());
+    }
+
+    [Fact]
+    public async Task RegisterRehashesLinkWhenAccessCodeIsRegenerated()
+    {
+        _unitOfWork.SetupSequence(unitOfWork => unitOfWork.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(UniqueViolationExceptions.For(UniqueIndexNames.ClientAccessCode))
+            .Returns(Task.CompletedTask);
+
+        await CreateService().RegisterAsync(CreateRegisterRequest());
+
+        _confirmationLinkIssuer.Verify(issuer => issuer.RehashForAccessCode(_issuedLink!, "CODIGO000002"), Times.Once());
+    }
+
+    [Fact]
+    public async Task RegisterSucceedsAndLogsErrorWhenEmailQueueIsFull()
+    {
+        _confirmationEmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>())).Returns(false);
+
+        var response = await CreateService().RegisterAsync(CreateRegisterRequest());
+
+        Assert.Equal("CODIGO000001", response.AccessCode);
+        Assert.Contains(1509, _logger.LoggedEventIds());
+    }
+
+    [Fact]
+    public async Task LoginOfPendingAccountWithCorrectPasswordIsForbiddenWithoutToken()
+    {
+        var client = SetupExistingClient(passwordIsValid: true);
+        client.EmailConfirmed = false;
+
+        await Assert.ThrowsAsync<EmailNotConfirmedException>(() => CreateService().LoginAsync(CreateLoginRequest()));
+
+        _accessTokenIssuer.Verify(issuer => issuer.Issue(It.IsAny<Client>()), Times.Never());
+        Assert.Equal([1506], _logger.LoggedEventIds());
+    }
+
+    [Fact]
+    public async Task LoginOfPendingAccountWithWrongPasswordKeepsGenericError()
+    {
+        var client = SetupExistingClient(passwordIsValid: false);
+        client.EmailConfirmed = false;
+
+        await Assert.ThrowsAsync<InvalidCredentialsException>(() => CreateService().LoginAsync(CreateLoginRequest()));
+
+        Assert.Equal([1101], _logger.LoggedEventIds());
     }
 
     [Fact]
@@ -134,11 +224,20 @@ public sealed class AuthServiceTests
 
     private Client SetupExistingClient(bool passwordIsValid)
     {
-        var client = new Client { Id = 42, AccessCode = "Ab3dEf6hIj9k", Email = "ana@exemplo.com", PasswordHash = "hash" };
+        var client = new Client { Id = 42, AccessCode = "Ab3dEf6hIj9k", Email = "ana@exemplo.com", PasswordHash = "hash", EmailConfirmed = true };
         _clientRepository.Setup(repository => repository.FindActiveByEmailAsync("ana@exemplo.com", It.IsAny<CancellationToken>()))
             .ReturnsAsync(client);
         _passwordHashingService.Setup(service => service.VerifyPassword(client, "senhaSegura1")).Returns(passwordIsValid);
         return client;
+    }
+
+    private IssuedConfirmationLink CreateIssuedLink(Client client, string origin)
+    {
+        _callOrder.Add("issue");
+        var link = new EmailConfirmationLink { Client = client, Origin = origin };
+        var message = new ConfirmationEmailMessage(client.Id, client.Email, client.Name, "https://ragauth.com.br/s/confirmation-register/v");
+        _issuedLink = new IssuedConfirmationLink(link, "validator", message);
+        return _issuedLink;
     }
 
     private static RegisterClientRequest CreateRegisterRequest(string email = "ana@exemplo.com", string name = "Ana") =>
@@ -154,5 +253,7 @@ public sealed class AuthServiceTests
         _accessCodeGenerator.Object,
         _accessTokenIssuer.Object,
         _businessService.Object,
+        _confirmationLinkIssuer.Object,
+        _confirmationEmailQueue.Object,
         _logger.Object);
 }

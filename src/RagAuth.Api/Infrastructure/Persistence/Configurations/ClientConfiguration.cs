@@ -14,6 +14,8 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
         builder.Property(client => client.Name).HasMaxLength(150).IsRequired();
         builder.Property(client => client.Email).HasMaxLength(254).IsRequired();
         builder.Property(client => client.PasswordHash).HasColumnType("text").IsRequired();
+        builder.Property(client => client.EmailConfirmed).IsRequired().HasDefaultValue(false);
+        builder.Property(client => client.EmailConfirmedAt);
         builder.HasIndex(client => client.AccessCode).IsUnique().HasDatabaseName(UniqueIndexNames.ClientAccessCode);
         builder.HasIndex(client => client.Email)
             .IsUnique()

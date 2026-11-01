@@ -1,5 +1,6 @@
 using RagAuth.Api.Endpoints;
 using RagAuth.Api.ErrorHandling;
+using RagAuth.Api.Infrastructure.Email;
 using RagAuth.Api.Infrastructure.Persistence;
 using RagAuth.Api.Infrastructure.RagApi;
 using RagAuth.Api.Observability;
@@ -22,6 +23,8 @@ public static class ApplicationServiceExtensions
             .AddAuthServices()
             .AddBusinessServices()
             .AddClientServices()
+            .AddEmailConfirmation()
+            .AddEmailServices()
             .AddRagApiClient();
         return builder;
     }
@@ -36,6 +39,7 @@ public static class ApplicationServiceExtensions
         app.MapAuthEndpoints();
         app.MapBusinessEndpoints();
         app.MapClientEndpoints();
+        app.MapEmailConfirmationEndpoints();
         return app;
     }
 }

@@ -29,7 +29,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [Fact]
     public async Task RequestsWithoutTokenOrWithExpiredTokenAreRejectedWithoutCallingRag()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         var expiredToken = TestTokens.Create(account, expiresAt: DateTime.UtcNow.AddMinutes(-5));
 
         foreach (var method in new[] { HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete })
@@ -49,7 +49,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [InlineData("{ \"name\": 123, \"description\": \"Pães\" }")]
     public async Task MalformedOrMistypedBodyIsRejectedWithoutCallingRag(string body)
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         var request = TestClientAccounts.CreateRequest(HttpMethod.Post, BusinessPath(account.ClientId), account.AccessToken);
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
@@ -60,7 +60,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [Fact]
     public async Task CreateStoresBusinessAndForwardsCredentialsAndUserCodeToRag()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         var response = await SendAsync(HttpMethod.Post, account.ClientId, account.AccessToken, CreateValidBusiness());
 
@@ -80,7 +80,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [Fact]
     public async Task SecondCreateIsConflictWithoutCallingRag()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         await SendAsync(HttpMethod.Post, account.ClientId, account.AccessToken, CreateValidBusiness());
 
         var response = await SendAsync(HttpMethod.Post, account.ClientId, account.AccessToken, CreateValidBusiness());
@@ -101,7 +101,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [InlineData("details", "tamanho:2001")]
     public async Task EachViolatedRuleReturnsFieldErrorWithoutCallingRag(string fieldName, string invalidValue)
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         var business = CreateValidBusiness();
         business[fieldName] = invalidValue.StartsWith("tamanho:", StringComparison.Ordinal)
             ? new string('a', int.Parse(invalidValue["tamanho:".Length..]))
@@ -117,7 +117,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [Fact]
     public async Task UpdateAndDeleteBeforeCreateAreNotFoundWithoutCallingRag()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         var updateResponse = await SendAsync(HttpMethod.Put, account.ClientId, account.AccessToken, CreateValidBusiness());
         var deleteResponse = await SendAsync(HttpMethod.Delete, account.ClientId, account.AccessToken);
@@ -130,7 +130,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [Fact]
     public async Task FullLifecycleIsReflectedInLogin()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         await SendAsync(HttpMethod.Post, account.ClientId, account.AccessToken, CreateValidBusiness());
         Assert.Equal("Padaria da Ana", (await TestClientAccounts.LoginAsync(_httpClient)).GetProperty("business").GetProperty("name").GetString());
 
@@ -153,7 +153,7 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [Fact]
     public async Task RagFailureOnCreateStoresNothing()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         factory.RagApi.RespondWith(HttpStatusCode.InternalServerError);
 
         await SendAsync(HttpMethod.Post, account.ClientId, account.AccessToken, CreateValidBusiness());
@@ -164,9 +164,9 @@ public sealed class BusinessEndpointsTests(RagAuthApiFactory factory) : IAsyncLi
     [Fact]
     public async Task ClientCannotTouchBusinessOfAnotherClient()
     {
-        var owner = await TestClientAccounts.RegisterAndLoginAsync(_httpClient, "bia@exemplo.com");
+        var owner = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient, "bia@exemplo.com");
         await SendAsync(HttpMethod.Post, owner.ClientId, owner.AccessToken, CreateValidBusiness());
-        var intruder = await TestClientAccounts.RegisterAndLoginAsync(_httpClient, "ana@exemplo.com");
+        var intruder = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient, "ana@exemplo.com");
 
         foreach (var method in new[] { HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete })
         {

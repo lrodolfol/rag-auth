@@ -17,7 +17,7 @@ public sealed class ClientEndpointsTests(RagAuthApiFactory factory) : IAsyncLife
     [Fact]
     public async Task RequestsWithoutTokenOrWithExpiredTokenAreRejected()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         var expiredToken = TestTokens.Create(account, expiresAt: DateTime.UtcNow.AddMinutes(-5));
 
         foreach (var token in new[] { null, expiredToken })
@@ -29,7 +29,7 @@ public sealed class ClientEndpointsTests(RagAuthApiFactory factory) : IAsyncLife
     [Fact]
     public async Task AccountWithoutBusinessIsRemovedWithoutCallingRag()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         var response = await DeleteAccountAsync(account.ClientId, account.AccessToken);
 
@@ -41,7 +41,7 @@ public sealed class ClientEndpointsTests(RagAuthApiFactory factory) : IAsyncLife
     [Fact]
     public async Task AccountWithBusinessIsRemovedAndCredentialsStopWorking()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         await CreateBusinessAsync(account);
 
         var response = await DeleteAccountAsync(account.ClientId, account.AccessToken);
@@ -58,10 +58,10 @@ public sealed class ClientEndpointsTests(RagAuthApiFactory factory) : IAsyncLife
     [Fact]
     public async Task EmailCanBeReusedButIdAndAccessCodeAreNew()
     {
-        var removedAccount = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var removedAccount = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         await DeleteAccountAsync(removedAccount.ClientId, removedAccount.AccessToken);
 
-        var newAccount = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var newAccount = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         Assert.NotEqual(removedAccount.ClientId, newAccount.ClientId);
         Assert.NotEqual(removedAccount.AccessCode, newAccount.AccessCode);
@@ -70,8 +70,8 @@ public sealed class ClientEndpointsTests(RagAuthApiFactory factory) : IAsyncLife
     [Fact]
     public async Task ClientIdOfAnotherClientIsForbidden()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
-        var otherAccount = await TestClientAccounts.RegisterAndLoginAsync(_httpClient, "bia@exemplo.com");
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
+        var otherAccount = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient, "bia@exemplo.com");
 
         var response = await DeleteAccountAsync(otherAccount.ClientId, account.AccessToken);
 
@@ -82,7 +82,7 @@ public sealed class ClientEndpointsTests(RagAuthApiFactory factory) : IAsyncLife
     [Fact]
     public async Task RagOutageKeepsAccountActive()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         await CreateBusinessAsync(account);
         factory.RagApi.FailWithConnectionError();
 

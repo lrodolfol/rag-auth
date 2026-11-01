@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using RagAuth.Api.Infrastructure.Email;
 using RagAuth.Api.Infrastructure.Persistence;
 using RagAuth.Api.Infrastructure.RagApi;
 using Testcontainers.PostgreSql;
@@ -19,12 +21,18 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
     public const string JwtAudience = "rag-api";
     public const string RagApiKey = "chave-secreta-da-api-rag-nos-testes";
     public const string RagApiBaseUrl = "http://rag-api.teste";
+    public const string ResendApiKey = "re_chave-secreta-do-resend-nos-testes";
+    public const string EmailFromAddress = "nao-responda@ragauth.teste";
 
     private readonly PostgreSqlContainer _databaseContainer = new PostgreSqlBuilder("postgres:17").Build();
 
     public LogCaptureProvider LogCapture { get; } = new();
 
     public FakeRagApiHandler RagApi { get; } = new();
+
+    public FakeConfirmationEmailSender EmailSender { get; } = new();
+
+    public AdjustableTimeProvider Clock { get; } = new();
 
     public async Task InitializeAsync()
     {
@@ -37,9 +45,25 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
     {
         await using var scope = Services.CreateAsyncScope();
         var databaseContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await databaseContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE businesses, clients CASCADE");
+        await WaitForEmailQueueToDrainAsync();
+        await databaseContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE email_confirmation_links, businesses, clients CASCADE");
         LogCapture.Clear();
         RagApi.Reset();
+        EmailSender.Reset();
+        Clock.Reset();
+    }
+
+    /// <summary>Evita que e-mails de um teste anterior cheguem ao fake depois do reset.</summary>
+    public async Task WaitForEmailQueueToDrainAsync()
+    {
+        var queue = (ChannelConfirmationEmailQueue)Services.GetRequiredService<IConfirmationEmailQueue>();
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (queue.PendingCount > 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        await Task.Delay(50);
     }
 
     public async Task ExecuteInDatabaseAsync(Func<AppDbContext, Task> action)
@@ -62,6 +86,10 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             services.AddTransient<IStartupFilter, ProtectedProbeStartupFilter>();
             services.AddHttpClient<IRagApiClient, RagApiClient>().ConfigurePrimaryHttpMessageHandler(() => RagApi);
+            services.RemoveAll<IConfirmationEmailSender>();
+            services.AddSingleton<IConfirmationEmailSender>(EmailSender);
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(Clock);
         });
     }
 
@@ -79,6 +107,10 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
             ["RAG_API_KEY"] = RagApiKey,
             ["ragApi:baseUrl"] = RagApiBaseUrl,
             ["ragApi:timeoutSeconds"] = "1",
+            ["RESEND_API_KEY"] = ResendApiKey,
+            ["email:fromAddress"] = EmailFromAddress,
+            ["email:retryDelaysSeconds:0"] = "0",
+            ["email:retryDelaysSeconds:1"] = "0",
         };
     }
 }
