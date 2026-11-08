@@ -37,4 +37,34 @@ public static partial class LogMessages
 
     [LoggerMessage(EventId = 1400, Level = LogLevel.Information, Message = "Conta do cliente {ClientId} removida com sucesso.")]
     public static partial void ClientAccountDeleted(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1500, Level = LogLevel.Information, Message = "E-mail de confirmação do cliente {ClientId} enviado na tentativa {AttemptNumber}.")]
+    public static partial void ConfirmationEmailSent(ILogger logger, int clientId, int attemptNumber);
+
+    [LoggerMessage(EventId = 1501, Level = LogLevel.Warning, Message = "Falha na tentativa {AttemptNumber} de envio do e-mail de confirmação do cliente {ClientId}: {FailureType}.")]
+    public static partial void ConfirmationEmailAttemptFailed(ILogger logger, int clientId, int attemptNumber, string failureType);
+
+    [LoggerMessage(EventId = 1502, Level = LogLevel.Error, Message = "O envio do e-mail de confirmação do cliente {ClientId} esgotou as {AttemptCount} tentativas.")]
+    public static partial void ConfirmationEmailDeliveryExhausted(ILogger logger, int clientId, int attemptCount);
+
+    [LoggerMessage(EventId = 1503, Level = LogLevel.Information, Message = "E-mail do cliente {ClientId} confirmado com sucesso.")]
+    public static partial void EmailConfirmed(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1504, Level = LogLevel.Warning, Message = "Link de confirmação expirado usado pelo cliente {ClientId}.")]
+    public static partial void ExpiredConfirmationLinkUsed(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1505, Level = LogLevel.Warning, Message = "Tentativa de confirmação de e-mail com link inválido.")]
+    public static partial void InvalidConfirmationLinkUsed(ILogger logger);
+
+    [LoggerMessage(EventId = 1506, Level = LogLevel.Warning, Message = "Login recusado para o cliente {ClientId}: e-mail ainda não confirmado.")]
+    public static partial void LoginRejectedEmailNotConfirmed(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1507, Level = LogLevel.Information, Message = "Novo link de confirmação emitido para o cliente {ClientId}.")]
+    public static partial void NewConfirmationLinkIssued(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1508, Level = LogLevel.Warning, Message = "Pedido de novo link de confirmação do cliente {ClientId} recusado por limite de emissão.")]
+    public static partial void NewConfirmationLinkThrottled(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1509, Level = LogLevel.Error, Message = "Fila de e-mails de confirmação cheia: mensagem do cliente {ClientId} descartada.")]
+    public static partial void ConfirmationEmailQueueRejected(ILogger logger, int clientId);
 }

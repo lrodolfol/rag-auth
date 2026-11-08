@@ -87,7 +87,7 @@ public sealed class RagFailureTests(RagAuthApiFactory factory) : IAsyncLifetime
 
     private async Task<TestClientAccount> PrepareAccountAsync(string method)
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         if (method != "POST")
         {
             var createRequest = TestClientAccounts.CreateRequest(

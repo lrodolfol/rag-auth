@@ -19,7 +19,26 @@ public static class OptionsServiceExtensions
             .PostConfigure(options => options.ApiKey = ReadSecret(configuration, EnvironmentSecretNames.RagApiKey))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        return services.AddEmailOptions(configuration);
+    }
+
+    private static IServiceCollection AddEmailOptions(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .PostConfigure(options => CompleteEmailOptions(options, configuration))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         return services;
+    }
+
+    private static void CompleteEmailOptions(EmailOptions options, IConfiguration configuration)
+    {
+        options.ResendApiKey = ReadSecret(configuration, EnvironmentSecretNames.ResendApiKey);
+        if (options.RetryDelaysSeconds.Length == 0)
+        {
+            options.RetryDelaysSeconds = EmailOptions.DefaultRetryDelaysSeconds;
+        }
     }
 
     private static string ReadSecret(IConfiguration configuration, string secretName) =>

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using RagAuth.IntegrationTests.Infrastructure;
 
 namespace RagAuth.IntegrationTests.CrossCutting;
@@ -19,7 +20,7 @@ public sealed class SensitiveDataAuditTests(RagAuthApiFactory factory) : IAsyncL
     [Fact]
     public async Task LogsAndErrorResponsesNeverContainPasswordTokenOrApiKey()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         await RecordErrorAsync(await _httpClient.PostAsJsonAsync("/api/v1/auth/login", new { email = account.Email, password = WrongPassword }));
         await RecordErrorAsync(await SendBusinessAsync(HttpMethod.Post, account));
         factory.RagApi.RespondWith(HttpStatusCode.Unauthorized);
@@ -36,6 +37,48 @@ public sealed class SensitiveDataAuditTests(RagAuthApiFactory factory) : IAsyncL
             .Concat(_errorResponseBodies)
             .ToList();
         Assert.NotEmpty(factory.LogCapture.Entries);
+        foreach (var sensitiveValue in sensitiveValues)
+        {
+            Assert.DoesNotContain(auditedTexts, text => text.Contains(sensitiveValue, StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task LogsAndErrorResponsesNeverContainConfirmationLinkDataOrResendKey()
+    {
+        await TestClientAccounts.RegisterPendingAsync(_httpClient, "ana@exemplo.com");
+        var firstEmail = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", TimeSpan.FromSeconds(5));
+        var firstPath = FakeConfirmationEmailSender.ExtractConfirmationPath(firstEmail);
+        await RecordErrorAsync(await _httpClient.GetAsync(firstPath[..^1] + (firstPath[^1] == 'A' ? "B" : "A")));
+        factory.Clock.Advance(TimeSpan.FromMinutes(5));
+        await _httpClient.PostAsJsonAsync(EmailConfirmationEndpointsTests.NewLinkPath, new { email = "ana@exemplo.com" });
+        var secondEmail = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", TimeSpan.FromSeconds(5), expectedCount: 2);
+        await RecordErrorAsync(await _httpClient.GetAsync(firstPath));
+        await _httpClient.GetAsync(FakeConfirmationEmailSender.ExtractConfirmationPath(secondEmail));
+        factory.EmailSender.FailNextAttempts(3);
+        await TestClientAccounts.RegisterPendingAsync(_httpClient, "bia@exemplo.com");
+        await factory.EmailSender.WaitForAttemptsAsync(5, TimeSpan.FromSeconds(5));
+        await factory.WaitForEmailQueueToDrainAsync();
+
+        var sensitiveValues = new List<string> { RagAuthApiFactory.ResendApiKey };
+        foreach (var email in new[] { firstEmail, secondEmail })
+        {
+            var pathSegments = FakeConfirmationEmailSender.ExtractConfirmationPath(email).Split('/');
+            sensitiveValues.AddRange([pathSegments[4], pathSegments[6], email.HtmlBody, FakeConfirmationEmailSender.ExtractConfirmationPath(email)]);
+        }
+
+        await factory.ExecuteInDatabaseAsync(async databaseContext =>
+            sensitiveValues.AddRange(await databaseContext.EmailConfirmationLinks.Select(link => link.Selector).ToListAsync()));
+        AssertNotPresentInLogsOrErrors(sensitiveValues);
+    }
+
+    private void AssertNotPresentInLogsOrErrors(IEnumerable<string> sensitiveValues)
+    {
+        var auditedTexts = factory.LogCapture.Entries
+            .SelectMany(entry => new[] { entry.Message, entry.ExceptionText ?? string.Empty })
+            .Concat(_errorResponseBodies)
+            .ToList();
+        Assert.Contains(factory.LogCapture.Entries, entry => entry.Message.Contains("esgotou"));
         foreach (var sensitiveValue in sensitiveValues)
         {
             Assert.DoesNotContain(auditedTexts, text => text.Contains(sensitiveValue, StringComparison.Ordinal));

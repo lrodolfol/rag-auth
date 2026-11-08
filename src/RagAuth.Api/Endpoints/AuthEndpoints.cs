@@ -20,7 +20,7 @@ public static class AuthEndpoints
         CancellationToken cancellationToken)
     {
         var registeredClient = await authService.RegisterAsync(request, cancellationToken);
-        var response = ApiResponse.Succeeded(StatusCodes.Status201Created, "Cadastro realizado com sucesso.", registeredClient);
+        var response = ApiResponse.Succeeded(StatusCodes.Status201Created, "Cadastro realizado com sucesso. Confirme o cadastro com seu e-mail", registeredClient);
         return TypedResults.Json(response, statusCode: StatusCodes.Status201Created);
     }
 

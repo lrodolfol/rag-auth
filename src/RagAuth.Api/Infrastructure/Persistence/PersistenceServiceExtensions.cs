@@ -19,6 +19,7 @@ public static class PersistenceServiceExtensions
         services.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
         services.AddScoped<IClientRepository, EntityFrameworkClientRepository>();
         services.AddScoped<IBusinessRepository, EntityFrameworkBusinessRepository>();
+        services.AddScoped<IEmailConfirmationLinkRepository, EntityFrameworkEmailConfirmationLinkRepository>();
         return services;
     }
 

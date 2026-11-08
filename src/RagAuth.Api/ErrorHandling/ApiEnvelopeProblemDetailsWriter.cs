@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.Options;
 using RagAuth.Api.Contracts;
@@ -26,8 +27,20 @@ public sealed class ApiEnvelopeProblemDetailsWriter(
     {
         var problemDetails = context.ProblemDetails;
         problemDetails.Status ??= context.HttpContext.Response.StatusCode;
-        problemDetails.Instance ??= context.HttpContext.Request.Path;
+        problemDetails.Instance ??= ResolveInstance(context.HttpContext);
         problemDetailsOptions.Value.CustomizeProblemDetails?.Invoke(context);
         problemDetails.Extensions[CorrelationIdExtensionName] = correlationIdAccessor.CorrelationId;
+    }
+
+    // O UseExceptionHandler limpa o endpoint do contexto; o original fica no IExceptionHandlerFeature.
+    private static string ResolveInstance(HttpContext httpContext)
+    {
+        var endpoint = httpContext.Features.Get<IExceptionHandlerFeature>()?.Endpoint ?? httpContext.GetEndpoint();
+        if (endpoint is RouteEndpoint routeEndpoint && endpoint.Metadata.GetMetadata<SensitiveRouteValuesMetadata>() is not null)
+        {
+            return routeEndpoint.RoutePattern.RawText ?? string.Empty;
+        }
+
+        return httpContext.Request.Path;
     }
 }

@@ -12,6 +12,8 @@ public sealed class StartupConfigurationTests
     [InlineData("DATABASE_PASSWORD")]
     [InlineData("JWT_SIGNING_KEY")]
     [InlineData("RAG_API_KEY")]
+    [InlineData("RESEND_API_KEY")]
+    [InlineData("email:fromAddress")]
     public void ApplicationDoesNotStartWhenSecretIsMissing(string secretName)
     {
         var settings = CreateValidSettings();
@@ -30,6 +32,8 @@ public sealed class StartupConfigurationTests
         ["DATABASE_PASSWORD"] = "senha-de-teste",
         ["JWT_SIGNING_KEY"] = RagAuthApiFactory.JwtSigningKey,
         ["RAG_API_KEY"] = RagAuthApiFactory.RagApiKey,
+        ["RESEND_API_KEY"] = RagAuthApiFactory.ResendApiKey,
+        ["email:fromAddress"] = RagAuthApiFactory.EmailFromAddress,
     };
 
     private static OptionsValidationException FindOptionsValidationException(Exception? exception)

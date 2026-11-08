@@ -1,0 +1,6 @@
+specify
+	clarification
+plan
+tasks
+	analyze
+implement

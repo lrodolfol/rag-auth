@@ -12,6 +12,8 @@ public sealed class AuthEndpointsTests(RagAuthApiFactory factory) : IAsyncLifeti
     private const string RegisterPath = "/api/v1/auth/register";
     private const string LoginPath = "/api/v1/auth/login";
     private const string InvalidCredentialsMessage = "E-mail ou senha inválidos.";
+    private const string EmailNotConfirmedMessage =
+        "O e-mail ainda não foi confirmado. Confirme seu e-mail pelo link enviado ou solicite um novo link para acessar a aplicação.";
 
     private readonly HttpClient _httpClient = factory.CreateClient();
 
@@ -36,7 +38,7 @@ public sealed class AuthEndpointsTests(RagAuthApiFactory factory) : IAsyncLifeti
     [Fact]
     public async Task RegisterRejectsSameEmailWithDifferentCase()
     {
-        await TestClientAccounts.RegisterAndLoginAsync(_httpClient, "ana@exemplo.com");
+        await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient, "ana@exemplo.com");
 
         var response = await _httpClient.PostAsJsonAsync(RegisterPath, new { name = "Ana", email = "ANA@exemplo.com", password = "senhaSegura1" });
 
@@ -71,7 +73,7 @@ public sealed class AuthEndpointsTests(RagAuthApiFactory factory) : IAsyncLifeti
     [Fact]
     public async Task UnsupportedMethodAndUnknownRouteReturnPortugueseMessages()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         var methodResponse = await _httpClient.SendAsync(TestClientAccounts.CreateRequest(HttpMethod.Get, RegisterPath, account.AccessToken));
         var routeResponse = await _httpClient.SendAsync(TestClientAccounts.CreateRequest(HttpMethod.Get, "/rota-inexistente", account.AccessToken));
@@ -94,7 +96,7 @@ public sealed class AuthEndpointsTests(RagAuthApiFactory factory) : IAsyncLifeti
     [Fact]
     public async Task LoginReturnsTokenAndNullBusiness()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         var data = await TestClientAccounts.LoginAsync(_httpClient, "ANA@exemplo.com");
 
@@ -111,10 +113,72 @@ public sealed class AuthEndpointsTests(RagAuthApiFactory factory) : IAsyncLifeti
     [InlineData("naoexiste@exemplo.com", "senhaSegura1")]
     public async Task LoginWithWrongPasswordOrUnknownEmailReturnsSameGenericError(string email, string password)
     {
-        await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
 
         var response = await _httpClient.PostAsJsonAsync(LoginPath, new { email, password });
 
         await ApiEnvelopeAssertions.AssertErrorAsync(response, HttpStatusCode.Unauthorized, InvalidCredentialsMessage);
+    }
+
+    [Fact]
+    public async Task PendingAccountWithCorrectPasswordIsForbiddenWithoutToken()
+    {
+        await TestClientAccounts.RegisterPendingAsync(_httpClient);
+
+        var response = await _httpClient.PostAsJsonAsync(LoginPath, new { email = "ana@exemplo.com", password = TestClientAccounts.DefaultPassword });
+
+        var body = await response.Content.ReadAsStringAsync();
+        var error = await ApiEnvelopeAssertions.AssertErrorAsync(response, HttpStatusCode.Forbidden, EmailNotConfirmedMessage);
+        Assert.Equal("Acesso negado", error.GetProperty("title").GetString());
+        Assert.Equal(EmailNotConfirmedMessage, error.GetProperty("detail").GetString());
+        Assert.True(error.TryGetProperty("correlationId", out _));
+        Assert.DoesNotContain("accessToken", body);
+    }
+
+    [Fact]
+    public async Task PendingAccountWithWrongPasswordReturnsGenericUnauthorized()
+    {
+        await TestClientAccounts.RegisterPendingAsync(_httpClient);
+
+        var response = await _httpClient.PostAsJsonAsync(LoginPath, new { email = "ana@exemplo.com", password = "senhaErrada9" });
+
+        await ApiEnvelopeAssertions.AssertErrorAsync(response, HttpStatusCode.Unauthorized, InvalidCredentialsMessage);
+    }
+
+    [Fact]
+    public async Task EmailOfPendingAccountBlocksNewRegistrationEvenAfterLinkExpires()
+    {
+        await TestClientAccounts.RegisterPendingAsync(_httpClient);
+
+        var beforeExpiration = await _httpClient.PostAsJsonAsync(RegisterPath, new { name = "Ana", email = "ana@exemplo.com", password = "senhaSegura1" });
+        factory.Clock.Advance(TimeSpan.FromHours(25));
+        var afterExpiration = await _httpClient.PostAsJsonAsync(RegisterPath, new { name = "Ana", email = "ana@exemplo.com", password = "senhaSegura1" });
+
+        await ApiEnvelopeAssertions.AssertErrorAsync(beforeExpiration, HttpStatusCode.Conflict);
+        await ApiEnvelopeAssertions.AssertErrorAsync(afterExpiration, HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task AccountConfirmedInDatabaseLikeMigratedAccountsLogsIn()
+    {
+        var pendingAccount = await TestClientAccounts.RegisterPendingAsync(_httpClient);
+        await TestClientAccounts.ConfirmEmailInDatabaseAsync(factory, pendingAccount.ClientId);
+
+        var data = await TestClientAccounts.LoginAsync(_httpClient);
+
+        Assert.Equal(pendingAccount.ClientId, data.GetProperty("clientId").GetInt32());
+    }
+
+    [Fact]
+    public async Task AccountConfirmedThroughEmailLinkLogsIn()
+    {
+        await TestClientAccounts.RegisterPendingAsync(_httpClient);
+        var email = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", TimeSpan.FromSeconds(5));
+
+        var confirmation = await _httpClient.GetAsync(FakeConfirmationEmailSender.ExtractConfirmationPath(email));
+        var data = await TestClientAccounts.LoginAsync(_httpClient);
+
+        Assert.Equal(HttpStatusCode.OK, confirmation.StatusCode);
+        Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("accessToken").GetString()));
     }
 }

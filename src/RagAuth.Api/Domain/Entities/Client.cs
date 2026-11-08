@@ -18,5 +18,11 @@ public class Client : IHasTimestamps
 
     public DateTimeOffset? DeletedAt { get; set; }
 
+    public bool EmailConfirmed { get; set; }
+
+    public DateTimeOffset? EmailConfirmedAt { get; set; }
+
     public Business? Business { get; set; }
+
+    public ICollection<EmailConfirmationLink> ConfirmationLinks { get; set; } = [];
 }

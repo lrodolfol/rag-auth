@@ -25,7 +25,7 @@ public sealed class CorrelationIdTests(RagAuthApiFactory factory) : IAsyncLifeti
     [Fact]
     public async Task CorrelationIdIsSharedByLogsRagCallAndErrorEnvelope()
     {
-        var account = await TestClientAccounts.RegisterAndLoginAsync(_httpClient);
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
         factory.LogCapture.Clear();
         factory.RagApi.RespondWith(HttpStatusCode.InternalServerError);
         var request = TestClientAccounts.CreateRequest(

@@ -8,14 +8,18 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using RagAuth.Api.Configuration;
 using RagAuth.Api.Domain.Exceptions;
+using RagAuth.Api.Infrastructure.Email;
 using RagAuth.Api.Infrastructure.Persistence;
 using RagAuth.Api.Infrastructure.RagApi;
 using RagAuth.Api.Services.Auth;
 using RagAuth.Api.Services.Business;
 using RagAuth.Api.Services.Clients;
+using RagAuth.Api.Services.EmailConfirmation;
+using Resend;
 
 namespace RagAuth.UnitTests.Configuration;
 
@@ -38,6 +42,8 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
             ["ragApi:baseUrl"] = "http://rag-api.teste",
             ["ragApi:timeoutSeconds"] = "7",
             ["RAG_API_KEY"] = "chave-rag",
+            ["RESEND_API_KEY"] = "re_chave-resend",
+            ["email:fromAddress"] = "nao-responda@ragauth.com.br",
         });
         builder.AddApplication();
         _application = builder.Build();
@@ -54,6 +60,13 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IClientAccountService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRagApiClient>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IEmailConfirmationService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IResend>());
+        Assert.IsType<ResendConfirmationEmailSender>(scope.ServiceProvider.GetRequiredService<IConfirmationEmailSender>());
+        Assert.Same(
+            _application.Services.GetRequiredService<IConfirmationEmailQueue>(),
+            scope.ServiceProvider.GetRequiredService<IConfirmationEmailQueue>());
+        Assert.Contains(_application.Services.GetServices<IHostedService>(), service => service is ConfirmationEmailDispatcher);
         var databaseContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Contains("Password=senha", databaseContext.Database.GetConnectionString());
     }
@@ -64,6 +77,20 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
         Assert.Equal("senha", _application.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value.Password);
         Assert.Equal("chave-rag", _application.Services.GetRequiredService<IOptions<RagApiOptions>>().Value.ApiKey);
         Assert.Equal(7, _application.Services.GetRequiredService<IOptions<RagApiOptions>>().Value.TimeoutSeconds);
+        Assert.Equal("re_chave-resend", _application.Services.GetRequiredService<IOptions<EmailOptions>>().Value.ResendApiKey);
+        Assert.Equal("re_chave-resend", _application.Services.GetRequiredService<IOptions<ResendClientOptions>>().Value.ApiToken);
+    }
+
+    [Fact]
+    public void EmailOptionsUseDocumentedDefaults()
+    {
+        var emailOptions = _application.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+
+        Assert.Equal("RagAuth", emailOptions.AppName);
+        Assert.Equal("https://ragauth.com.br", emailOptions.ConfirmationPageBaseUrl);
+        Assert.Equal(5, emailOptions.NewLinkIntervalMinutes);
+        Assert.Equal(10, emailOptions.MaximumNewLinksPerDay);
+        Assert.Equal([30, 120], emailOptions.RetryDelaysSeconds);
     }
 
     [Fact]
@@ -101,6 +128,8 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
         Assert.Contains("/api/v1/auth/login", routes);
         Assert.Contains("/api/v1/{clientId}/business", routes);
         Assert.Contains("/api/v1/{clientId}", routes);
+        Assert.Contains("/api/v1/client/{clientIdentificationHash}/confirmation-register/{keyHash}", routes);
+        Assert.Contains("/api/v1/client/new-confirmation-register", routes);
     }
 
     [Fact]
