@@ -22,7 +22,11 @@ public class Client : IHasTimestamps
 
     public DateTimeOffset? EmailConfirmedAt { get; set; }
 
+    public DateTimeOffset? PasswordChangedAt { get; set; }
+
     public Business? Business { get; set; }
 
     public ICollection<EmailConfirmationLink> ConfirmationLinks { get; set; } = [];
+
+    public ICollection<PasswordRecoveryLink> PasswordRecoveryLinks { get; set; } = [];
 }

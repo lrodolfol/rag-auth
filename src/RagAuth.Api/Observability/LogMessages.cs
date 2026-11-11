@@ -1,3 +1,5 @@
+using RagAuth.Api.Infrastructure.Email;
+
 namespace RagAuth.Api.Observability;
 
 public static partial class LogMessages
@@ -38,14 +40,14 @@ public static partial class LogMessages
     [LoggerMessage(EventId = 1400, Level = LogLevel.Information, Message = "Conta do cliente {ClientId} removida com sucesso.")]
     public static partial void ClientAccountDeleted(ILogger logger, int clientId);
 
-    [LoggerMessage(EventId = 1500, Level = LogLevel.Information, Message = "E-mail de confirmação do cliente {ClientId} enviado na tentativa {AttemptNumber}.")]
-    public static partial void ConfirmationEmailSent(ILogger logger, int clientId, int attemptNumber);
+    [LoggerMessage(EventId = 1500, Level = LogLevel.Information, Message = "E-mail {EmailKind} do cliente {ClientId} enviado na tentativa {AttemptNumber}.")]
+    public static partial void EmailSent(ILogger logger, EmailKind emailKind, int clientId, int attemptNumber);
 
-    [LoggerMessage(EventId = 1501, Level = LogLevel.Warning, Message = "Falha na tentativa {AttemptNumber} de envio do e-mail de confirmação do cliente {ClientId}: {FailureType}.")]
-    public static partial void ConfirmationEmailAttemptFailed(ILogger logger, int clientId, int attemptNumber, string failureType);
+    [LoggerMessage(EventId = 1501, Level = LogLevel.Warning, Message = "Falha na tentativa {AttemptNumber} de envio do e-mail {EmailKind} do cliente {ClientId}: {FailureType}.")]
+    public static partial void EmailAttemptFailed(ILogger logger, EmailKind emailKind, int clientId, int attemptNumber, string failureType);
 
-    [LoggerMessage(EventId = 1502, Level = LogLevel.Error, Message = "O envio do e-mail de confirmação do cliente {ClientId} esgotou as {AttemptCount} tentativas.")]
-    public static partial void ConfirmationEmailDeliveryExhausted(ILogger logger, int clientId, int attemptCount);
+    [LoggerMessage(EventId = 1502, Level = LogLevel.Error, Message = "O envio do e-mail {EmailKind} do cliente {ClientId} esgotou as {AttemptCount} tentativas.")]
+    public static partial void EmailDeliveryExhausted(ILogger logger, EmailKind emailKind, int clientId, int attemptCount);
 
     [LoggerMessage(EventId = 1503, Level = LogLevel.Information, Message = "E-mail do cliente {ClientId} confirmado com sucesso.")]
     public static partial void EmailConfirmed(ILogger logger, int clientId);
@@ -65,6 +67,24 @@ public static partial class LogMessages
     [LoggerMessage(EventId = 1508, Level = LogLevel.Warning, Message = "Pedido de novo link de confirmação do cliente {ClientId} recusado por limite de emissão.")]
     public static partial void NewConfirmationLinkThrottled(ILogger logger, int clientId);
 
-    [LoggerMessage(EventId = 1509, Level = LogLevel.Error, Message = "Fila de e-mails de confirmação cheia: mensagem do cliente {ClientId} descartada.")]
-    public static partial void ConfirmationEmailQueueRejected(ILogger logger, int clientId);
+    [LoggerMessage(EventId = 1509, Level = LogLevel.Error, Message = "Fila de e-mails cheia: e-mail {EmailKind} do cliente {ClientId} descartado.")]
+    public static partial void EmailQueueRejected(ILogger logger, EmailKind emailKind, int clientId);
+
+    [LoggerMessage(EventId = 1600, Level = LogLevel.Information, Message = "Link de recuperação de senha emitido para o cliente {ClientId}.")]
+    public static partial void PasswordRecoveryLinkIssued(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1601, Level = LogLevel.Warning, Message = "Pedido de recuperação de senha do cliente {ClientId} recusado por limite de emissão.")]
+    public static partial void PasswordRecoveryThrottled(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1602, Level = LogLevel.Information, Message = "Pedido de recuperação de senha para e-mail sem conta ativa e confirmada.")]
+    public static partial void PasswordRecoveryRequestedForIneligibleEmail(ILogger logger);
+
+    [LoggerMessage(EventId = 1603, Level = LogLevel.Information, Message = "Senha do cliente {ClientId} redefinida com sucesso.")]
+    public static partial void PasswordReset(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1604, Level = LogLevel.Warning, Message = "Link de recuperação de senha expirado usado pelo cliente {ClientId}.")]
+    public static partial void ExpiredPasswordRecoveryLinkUsed(ILogger logger, int clientId);
+
+    [LoggerMessage(EventId = 1605, Level = LogLevel.Warning, Message = "Tentativa de uso de link de recuperação de senha inválido.")]
+    public static partial void InvalidPasswordRecoveryLinkUsed(ILogger logger);
 }

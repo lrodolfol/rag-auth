@@ -1,15 +1,14 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
-using RagAuth.Api.Domain.Entities;
 
-namespace RagAuth.Api.Services.EmailConfirmation;
+namespace RagAuth.Api.Services.SecureLinks;
 
 /// <summary>
-/// Padrão selector/validator (research R1): o selector localiza o link; só o hash do validator,
-/// vinculado ao código de acesso e à ação, é persistido.
+/// Padrão selector/validator: o selector localiza o link; só o hash do validator,
+/// vinculado ao código de acesso e à ação (<c>purpose</c>), é persistido.
 /// </summary>
-public sealed class RandomConfirmationLinkGenerator : IConfirmationLinkGenerator
+public sealed class RandomSecureLinkGenerator : ISecureLinkGenerator
 {
     public const int SelectorByteCount = 16;
     public const int ValidatorByteCount = 32;
@@ -21,16 +20,16 @@ public sealed class RandomConfirmationLinkGenerator : IConfirmationLinkGenerator
 
     public string GenerateValidator() => GenerateRandomBase64Url(ValidatorByteCount);
 
-    public string ComputeValidatorHash(string validator, string accessCode)
+    public string ComputeValidatorHash(string validator, string accessCode, string purpose)
     {
-        var hashInput = $"{validator}:{accessCode}:{EmailConfirmationLink.EmailConfirmationPurpose}";
+        var hashInput = $"{validator}:{accessCode}:{purpose}";
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(hashInput));
         return Convert.ToHexStringLower(hashBytes);
     }
 
-    public bool IsValidatorMatch(string validator, string accessCode, string storedHash)
+    public bool IsValidatorMatch(string validator, string accessCode, string purpose, string storedHash)
     {
-        var computedHash = Encoding.ASCII.GetBytes(ComputeValidatorHash(validator, accessCode));
+        var computedHash = Encoding.ASCII.GetBytes(ComputeValidatorHash(validator, accessCode, purpose));
         var expectedHash = Encoding.ASCII.GetBytes(storedHash);
         return CryptographicOperations.FixedTimeEquals(computedHash, expectedHash);
     }

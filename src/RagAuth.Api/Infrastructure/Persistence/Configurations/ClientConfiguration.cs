@@ -16,6 +16,7 @@ public sealed class ClientConfiguration : IEntityTypeConfiguration<Client>
         builder.Property(client => client.PasswordHash).HasColumnType("text").IsRequired();
         builder.Property(client => client.EmailConfirmed).IsRequired().HasDefaultValue(false);
         builder.Property(client => client.EmailConfirmedAt);
+        builder.Property(client => client.PasswordChangedAt).IsRequired(false);
         builder.HasIndex(client => client.AccessCode).IsUnique().HasDatabaseName(UniqueIndexNames.ClientAccessCode);
         builder.HasIndex(client => client.Email)
             .IsUnique()
