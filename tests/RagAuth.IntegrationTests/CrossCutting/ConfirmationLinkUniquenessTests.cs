@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using RagAuth.Api.Domain.Entities;
 using RagAuth.Api.Services.EmailConfirmation;
+using RagAuth.Api.Services.SecureLinks;
 using RagAuth.IntegrationTests.Infrastructure;
 
 namespace RagAuth.IntegrationTests.CrossCutting;
@@ -19,7 +20,7 @@ public sealed class ConfirmationLinkUniquenessTests(RagAuthApiFactory factory) :
     [Fact]
     public async Task TenThousandLinksAreStoredWithoutSelectorOrValidatorCollision()
     {
-        var linkGenerator = factory.Services.GetRequiredService<IConfirmationLinkGenerator>();
+        var linkGenerator = factory.Services.GetRequiredService<ISecureLinkGenerator>();
         var validators = Enumerable.Range(0, LinkCount).Select(_ => linkGenerator.GenerateValidator()).ToList();
 
         await factory.ExecuteInDatabaseAsync(async databaseContext =>
@@ -38,11 +39,11 @@ public sealed class ConfirmationLinkUniquenessTests(RagAuthApiFactory factory) :
     }
 
     // Links já usados: o teste mede só a unicidade, sem esbarrar no índice "um link ativo por cliente".
-    private static EmailConfirmationLink CreateUsedLink(Client client, IConfirmationLinkGenerator linkGenerator, string validator) => new()
+    private static EmailConfirmationLink CreateUsedLink(Client client, ISecureLinkGenerator linkGenerator, string validator) => new()
     {
         Client = client,
         Selector = linkGenerator.GenerateSelector(),
-        ValidatorHash = linkGenerator.ComputeValidatorHash(validator, client.AccessCode),
+        ValidatorHash = linkGenerator.ComputeValidatorHash(validator, client.AccessCode, EmailConfirmationLink.EmailConfirmationPurpose),
         Origin = ConfirmationLinkOrigin.Registration,
         IssuedAt = DateTimeOffset.UtcNow,
         ExpiresAt = DateTimeOffset.UtcNow.AddHours(24),

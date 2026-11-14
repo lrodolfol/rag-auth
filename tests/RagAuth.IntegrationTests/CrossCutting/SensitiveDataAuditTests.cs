@@ -48,13 +48,13 @@ public sealed class SensitiveDataAuditTests(RagAuthApiFactory factory) : IAsyncL
     {
         await TestClientAccounts.RegisterPendingAsync(_httpClient, "ana@exemplo.com");
         var firstEmail = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", TimeSpan.FromSeconds(5));
-        var firstPath = FakeConfirmationEmailSender.ExtractConfirmationPath(firstEmail);
+        var firstPath = FakeEmailSender.ExtractConfirmationPath(firstEmail);
         await RecordErrorAsync(await _httpClient.GetAsync(firstPath[..^1] + (firstPath[^1] == 'A' ? "B" : "A")));
         factory.Clock.Advance(TimeSpan.FromMinutes(5));
         await _httpClient.PostAsJsonAsync(EmailConfirmationEndpointsTests.NewLinkPath, new { email = "ana@exemplo.com" });
         var secondEmail = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", TimeSpan.FromSeconds(5), expectedCount: 2);
         await RecordErrorAsync(await _httpClient.GetAsync(firstPath));
-        await _httpClient.GetAsync(FakeConfirmationEmailSender.ExtractConfirmationPath(secondEmail));
+        await _httpClient.GetAsync(FakeEmailSender.ExtractConfirmationPath(secondEmail));
         factory.EmailSender.FailNextAttempts(3);
         await TestClientAccounts.RegisterPendingAsync(_httpClient, "bia@exemplo.com");
         await factory.EmailSender.WaitForAttemptsAsync(5, TimeSpan.FromSeconds(5));
@@ -63,13 +63,60 @@ public sealed class SensitiveDataAuditTests(RagAuthApiFactory factory) : IAsyncL
         var sensitiveValues = new List<string> { RagAuthApiFactory.ResendApiKey };
         foreach (var email in new[] { firstEmail, secondEmail })
         {
-            var pathSegments = FakeConfirmationEmailSender.ExtractConfirmationPath(email).Split('/');
-            sensitiveValues.AddRange([pathSegments[4], pathSegments[6], email.HtmlBody, FakeConfirmationEmailSender.ExtractConfirmationPath(email)]);
+            var pathSegments = FakeEmailSender.ExtractConfirmationPath(email).Split('/');
+            sensitiveValues.AddRange([pathSegments[4], pathSegments[6], email.HtmlBody, FakeEmailSender.ExtractConfirmationPath(email)]);
         }
 
         await factory.ExecuteInDatabaseAsync(async databaseContext =>
             sensitiveValues.AddRange(await databaseContext.EmailConfirmationLinks.Select(link => link.Selector).ToListAsync()));
         AssertNotPresentInLogsOrErrors(sensitiveValues);
+    }
+
+    [Fact]
+    public async Task LogsAndErrorResponsesNeverContainPasswordRecoveryDataPasswordsOrRawEmail()
+    {
+        const string NewPassword = "NovaSenha123";
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
+        var firstEmail = await RequestRecoveryEmailAsync(account.Email, expectedCount: 1);
+        var firstPath = FakeEmailSender.ExtractRecoveryPath(firstEmail);
+        await RecordErrorAsync(await _httpClient.GetAsync(firstPath[..^1] + (firstPath[^1] == 'A' ? "B" : "A")));
+        await RecordErrorAsync(await _httpClient.PutAsJsonAsync(firstPath, new { newPassword = NewPassword, newPasswordConfirmation = "Diferente123" }));
+        await _httpClient.PutAsJsonAsync(firstPath, new { newPassword = NewPassword, newPasswordConfirmation = NewPassword });
+        await RecordErrorAsync(await _httpClient.PostAsJsonAsync("/api/v1/auth/login", new { email = account.Email, password = account.Password }));
+        factory.Clock.Advance(TimeSpan.FromMinutes(5));
+        var secondEmail = await RequestRecoveryEmailAsync(account.Email, expectedCount: 2);
+        factory.Clock.Advance(TimeSpan.FromHours(25));
+        await RecordErrorAsync(await _httpClient.GetAsync(FakeEmailSender.ExtractRecoveryPath(secondEmail)));
+        await factory.WaitForEmailQueueToDrainAsync();
+
+        var sensitiveValues = new List<string> { NewPassword, account.Password, account.Email };
+        foreach (var email in new[] { firstEmail, secondEmail })
+        {
+            var path = FakeEmailSender.ExtractRecoveryPath(email);
+            sensitiveValues.AddRange([path, path.Split('/')[4], path.Split('/')[6], email.HtmlBody]);
+        }
+
+        Assert.Contains(factory.LogCapture.Entries, entry => entry.Message.Contains("expirado"));
+        AssertAbsentFromLogsAndErrors(sensitiveValues);
+    }
+
+    private async Task<RagAuth.Api.Infrastructure.Email.ComposedEmail> RequestRecoveryEmailAsync(string email, int expectedCount)
+    {
+        await _httpClient.PostAsJsonAsync(PasswordRecoveryEndpointsTests.RequestPath, new { email });
+        return await factory.EmailSender.WaitForEmailAsync(email, FakeEmailSender.PasswordRecoverySubjectPrefix, TimeSpan.FromSeconds(5), expectedCount);
+    }
+
+    private void AssertAbsentFromLogsAndErrors(IEnumerable<string> sensitiveValues)
+    {
+        var auditedTexts = factory.LogCapture.Entries
+            .SelectMany(entry => new[] { entry.Message, entry.ExceptionText ?? string.Empty })
+            .Concat(_errorResponseBodies)
+            .ToList();
+        foreach (var sensitiveValue in sensitiveValues)
+        {
+            var leakingText = auditedTexts.FirstOrDefault(text => text.Contains(sensitiveValue, StringComparison.Ordinal));
+            Assert.True(leakingText is null, $"Valor sensível encontrado em log ou erro: {leakingText}");
+        }
     }
 
     private void AssertNotPresentInLogsOrErrors(IEnumerable<string> sensitiveValues)

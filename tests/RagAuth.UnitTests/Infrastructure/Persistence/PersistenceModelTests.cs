@@ -29,6 +29,25 @@ public sealed class PersistenceModelTests
     }
 
     [Fact]
+    public void PasswordRecoveryLinkModelUsesExpectedColumnTypesIndexesAndFilter()
+    {
+        using var databaseContext = CreateDatabaseContext();
+        var linkType = databaseContext.Model.FindEntityType(typeof(PasswordRecoveryLink))!;
+        var clientType = databaseContext.Model.FindEntityType(typeof(Client))!;
+
+        Assert.Equal("password_recovery_links", linkType.GetTableName());
+        Assert.Equal("varchar(22)", linkType.FindProperty(nameof(PasswordRecoveryLink.Selector))!.GetColumnType());
+        Assert.Equal("char(64)", linkType.FindProperty(nameof(PasswordRecoveryLink.ValidatorHash))!.GetColumnType());
+        Assert.Equal("varchar(32)", linkType.FindProperty(nameof(PasswordRecoveryLink.Purpose))!.GetColumnType());
+        Assert.NotNull(linkType.GetDeclaredQueryFilters().SingleOrDefault());
+        var activeIndex = linkType.GetIndexes().Single(index => index.GetDatabaseName() == UniqueIndexNames.ActivePasswordRecoveryLinkPerClient);
+        Assert.True(activeIndex.IsUnique);
+        Assert.Equal("\"usedAt\" IS NULL AND \"revokedAt\" IS NULL", activeIndex.GetFilter());
+        Assert.Contains(linkType.GetIndexes(), index => index.GetDatabaseName() == UniqueIndexNames.PasswordRecoveryLinkSelector && index.IsUnique);
+        Assert.True(clientType.FindProperty(nameof(Client.PasswordChangedAt))!.IsNullable);
+    }
+
+    [Fact]
     public void InterceptorFillsBothTimestampsOnInsert()
     {
         using var databaseContext = CreateDatabaseContext();

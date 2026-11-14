@@ -23,7 +23,7 @@ public sealed class AuthServiceTests
     private readonly Mock<IAccessTokenIssuer> _accessTokenIssuer = new();
     private readonly Mock<IBusinessService> _businessService = new();
     private readonly Mock<IConfirmationLinkIssuer> _confirmationLinkIssuer = new();
-    private readonly Mock<IConfirmationEmailQueue> _confirmationEmailQueue = new();
+    private readonly Mock<IEmailQueue> _confirmationEmailQueue = new();
     private readonly Mock<ILogger<AuthService>> _logger = LoggerMocks.Create<AuthService>();
     private readonly List<string> _callOrder = [];
     private Client? _addedClient;
@@ -38,7 +38,7 @@ public sealed class AuthServiceTests
             .Returns("CODIGO000004").Returns("CODIGO000005").Returns("CODIGO000006");
         _confirmationLinkIssuer.Setup(issuer => issuer.Issue(It.IsAny<Client>(), It.IsAny<string>()))
             .Returns<Client, string>(CreateIssuedLink);
-        _confirmationEmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>()))
+        _confirmationEmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<OutgoingEmailMessage>()))
             .Callback(() => _callOrder.Add("enqueue"))
             .Returns(true);
         _unitOfWork.Setup(unitOfWork => unitOfWork.SaveChangesAsync(It.IsAny<CancellationToken>()))
@@ -61,8 +61,8 @@ public sealed class AuthServiceTests
         Assert.Null(_addedClient.EmailConfirmedAt);
         _confirmationLinkIssuer.Verify(issuer => issuer.Issue(_addedClient, ConfirmationLinkOrigin.Registration), Times.Once());
         Assert.Equal(["issue", "save", "enqueue"], _callOrder);
-        _confirmationEmailQueue.Verify(queue => queue.TryEnqueue(It.Is<ConfirmationEmailMessage>(message =>
-            message.ClientId == 42 && message.ConfirmationUrl == _issuedLink!.Message.ConfirmationUrl)), Times.Once());
+        _confirmationEmailQueue.Verify(queue => queue.TryEnqueue(It.Is<OutgoingEmailMessage>(message =>
+            message.ClientId == 42 && message.Kind == EmailKind.EmailConfirmation && message.ActionUrl == _issuedLink!.Message.ActionUrl)), Times.Once());
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class AuthServiceTests
 
         await Assert.ThrowsAsync<EmailAlreadyRegisteredException>(() => CreateService().RegisterAsync(CreateRegisterRequest()));
 
-        _confirmationEmailQueue.Verify(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>()), Times.Never());
+        _confirmationEmailQueue.Verify(queue => queue.TryEnqueue(It.IsAny<OutgoingEmailMessage>()), Times.Never());
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class AuthServiceTests
     [Fact]
     public async Task RegisterSucceedsAndLogsErrorWhenEmailQueueIsFull()
     {
-        _confirmationEmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>())).Returns(false);
+        _confirmationEmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<OutgoingEmailMessage>())).Returns(false);
 
         var response = await CreateService().RegisterAsync(CreateRegisterRequest());
 
@@ -235,7 +235,7 @@ public sealed class AuthServiceTests
     {
         _callOrder.Add("issue");
         var link = new EmailConfirmationLink { Client = client, Origin = origin };
-        var message = new ConfirmationEmailMessage(client.Id, client.Email, client.Name, "https://ragauth.com.br/s/confirmation-register/v");
+        var message = new OutgoingEmailMessage(EmailKind.EmailConfirmation, client.Id, client.Email, client.Name, "https://ragauth.com.br/s/confirmation-register/v");
         _issuedLink = new IssuedConfirmationLink(link, "validator", message);
         return _issuedLink;
     }

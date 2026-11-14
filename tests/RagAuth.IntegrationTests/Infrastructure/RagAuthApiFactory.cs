@@ -23,6 +23,7 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
     public const string RagApiBaseUrl = "http://rag-api.teste";
     public const string ResendApiKey = "re_chave-secreta-do-resend-nos-testes";
     public const string EmailFromAddress = "nao-responda@ragauth.teste";
+    public const string PageBaseUrl = "https://ragauth.com.br";
 
     private readonly PostgreSqlContainer _databaseContainer = new PostgreSqlBuilder("postgres:17").Build();
 
@@ -30,7 +31,7 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
 
     public FakeRagApiHandler RagApi { get; } = new();
 
-    public FakeConfirmationEmailSender EmailSender { get; } = new();
+    public FakeEmailSender EmailSender { get; } = new();
 
     public AdjustableTimeProvider Clock { get; } = new();
 
@@ -46,7 +47,7 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
         await using var scope = Services.CreateAsyncScope();
         var databaseContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await WaitForEmailQueueToDrainAsync();
-        await databaseContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE email_confirmation_links, businesses, clients CASCADE");
+        await databaseContext.Database.ExecuteSqlRawAsync("TRUNCATE TABLE password_recovery_links, email_confirmation_links, businesses, clients CASCADE");
         LogCapture.Clear();
         RagApi.Reset();
         EmailSender.Reset();
@@ -56,7 +57,7 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
     /// <summary>Evita que e-mails de um teste anterior cheguem ao fake depois do reset.</summary>
     public async Task WaitForEmailQueueToDrainAsync()
     {
-        var queue = (ChannelConfirmationEmailQueue)Services.GetRequiredService<IConfirmationEmailQueue>();
+        var queue = (ChannelEmailQueue)Services.GetRequiredService<IEmailQueue>();
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (queue.PendingCount > 0 && DateTime.UtcNow < deadline)
         {
@@ -86,8 +87,8 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
         {
             services.AddTransient<IStartupFilter, ProtectedProbeStartupFilter>();
             services.AddHttpClient<IRagApiClient, RagApiClient>().ConfigurePrimaryHttpMessageHandler(() => RagApi);
-            services.RemoveAll<IConfirmationEmailSender>();
-            services.AddSingleton<IConfirmationEmailSender>(EmailSender);
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(EmailSender);
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
         });
@@ -109,6 +110,8 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
             ["ragApi:timeoutSeconds"] = "1",
             ["RESEND_API_KEY"] = ResendApiKey,
             ["email:fromAddress"] = EmailFromAddress,
+            ["email:confirmationPageBaseUrl"] = PageBaseUrl,
+            ["email:passwordRecoveryPageBaseUrl"] = PageBaseUrl,
             ["email:retryDelaysSeconds:0"] = "0",
             ["email:retryDelaysSeconds:1"] = "0",
         };

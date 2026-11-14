@@ -26,7 +26,7 @@ public sealed class AuthEndpointsTests(RagAuthApiFactory factory) : IAsyncLifeti
     {
         var response = await _httpClient.PostAsJsonAsync(RegisterPath, new { name = "Ana Souza", email = "Ana@Exemplo.com", password = "senhaSegura1" });
 
-        var data = await ApiEnvelopeAssertions.AssertSuccessAsync(response, HttpStatusCode.Created, "Cadastro realizado com sucesso.");
+        var data = await ApiEnvelopeAssertions.AssertSuccessAsync(response, HttpStatusCode.Created, "Cadastro realizado com sucesso. Confirme o cadastro com seu e-mail");
         Assert.True(data.GetProperty("clientId").GetInt32() > 0);
         Assert.Equal(12, data.GetProperty("accessCode").GetString()!.Length);
         Assert.Equal("ana@exemplo.com", data.GetProperty("email").GetString());
@@ -175,7 +175,7 @@ public sealed class AuthEndpointsTests(RagAuthApiFactory factory) : IAsyncLifeti
         await TestClientAccounts.RegisterPendingAsync(_httpClient);
         var email = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", TimeSpan.FromSeconds(5));
 
-        var confirmation = await _httpClient.GetAsync(FakeConfirmationEmailSender.ExtractConfirmationPath(email));
+        var confirmation = await _httpClient.GetAsync(FakeEmailSender.ExtractConfirmationPath(email));
         var data = await TestClientAccounts.LoginAsync(_httpClient);
 
         Assert.Equal(HttpStatusCode.OK, confirmation.StatusCode);

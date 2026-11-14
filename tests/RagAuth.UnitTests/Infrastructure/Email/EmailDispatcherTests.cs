@@ -9,21 +9,21 @@ using RagAuth.UnitTests.TestDoubles;
 
 namespace RagAuth.UnitTests.Infrastructure.Email;
 
-public sealed class ConfirmationEmailDispatcherTests
+public sealed class EmailDispatcherTests
 {
     private const int SentEventId = 1500;
     private const int AttemptFailedEventId = 1501;
     private const int ExhaustedEventId = 1502;
 
-    private readonly ChannelConfirmationEmailQueue _queue = new();
+    private readonly ChannelEmailQueue _queue = new();
     private readonly RecordingEmailSender _sender = new();
     private readonly AdjustableTimeProvider _timeProvider = new();
-    private readonly Mock<ILogger<ConfirmationEmailDispatcher>> _logger = LoggerMocks.Create<ConfirmationEmailDispatcher>();
-    private readonly Mock<IConfirmationEmailComposer> _composer = new();
+    private readonly Mock<ILogger<EmailDispatcher>> _logger = LoggerMocks.Create<EmailDispatcher>();
+    private readonly Mock<IEmailComposer> _composer = new();
 
-    public ConfirmationEmailDispatcherTests() =>
-        _composer.Setup(composer => composer.Compose(It.IsAny<ConfirmationEmailMessage>()))
-            .Returns<ConfirmationEmailMessage>(message => new ConfirmationEmail(message.RecipientEmail, "Assunto", "Corpo"));
+    public EmailDispatcherTests() =>
+        _composer.Setup(composer => composer.Compose(It.IsAny<OutgoingEmailMessage>()))
+            .Returns<OutgoingEmailMessage>(message => new ComposedEmail(message.RecipientEmail, "Assunto", "Corpo"));
 
     [Fact]
     public async Task SuccessfulFirstAttemptLogsSent()
@@ -77,7 +77,7 @@ public sealed class ConfirmationEmailDispatcherTests
     [Fact]
     public async Task ComposerOrSenderExceptionNeverEscapes()
     {
-        _composer.Setup(composer => composer.Compose(It.IsAny<ConfirmationEmailMessage>())).Throws(new InvalidOperationException("falha"));
+        _composer.Setup(composer => composer.Compose(It.IsAny<OutgoingEmailMessage>())).Throws(new InvalidOperationException("falha"));
 
         var exception = await Record.ExceptionAsync(() => CreateDispatcher().ProcessAsync(CreateMessage(attemptNumber: 3), CancellationToken.None));
 
@@ -112,6 +112,20 @@ public sealed class ConfirmationEmailDispatcherTests
     }
 
     [Fact]
+    public async Task DeliveryLogsCarryTheEmailKindOfTheMessage()
+    {
+        _sender.FailuresBeforeSuccess = int.MaxValue;
+        var recoveryMessage = CreateMessage(attemptNumber: 3) with { Kind = EmailKind.PasswordRecovery };
+
+        await CreateDispatcher().ProcessAsync(recoveryMessage, CancellationToken.None);
+        _sender.FailuresBeforeSuccess = 0;
+        await CreateDispatcher().ProcessAsync(recoveryMessage with { AttemptNumber = 1 }, CancellationToken.None);
+
+        Assert.Equal([AttemptFailedEventId, ExhaustedEventId, SentEventId], _logger.LoggedEventIds());
+        Assert.All(_logger.LoggedMessages(), message => Assert.Contains(nameof(EmailKind.PasswordRecovery), message));
+    }
+
+    [Fact]
     public async Task EmptyRetryConfigurationRetriesImmediately()
     {
         _sender.FailuresBeforeSuccess = 1;
@@ -121,13 +135,13 @@ public sealed class ConfirmationEmailDispatcherTests
         Assert.Equal(2, (await DequeueAsync()).AttemptNumber);
     }
 
-    private ConfirmationEmailDispatcher CreateDispatcher(int[]? retryDelaysSeconds = null)
+    private EmailDispatcher CreateDispatcher(int[]? retryDelaysSeconds = null)
     {
         var services = new ServiceCollection();
-        services.AddScoped<IConfirmationEmailSender>(_ => _sender);
+        services.AddScoped<IEmailSender>(_ => _sender);
         var serviceProvider = services.BuildServiceProvider();
         var emailOptions = new EmailOptions { RetryDelaysSeconds = retryDelaysSeconds ?? [30, 120] };
-        return new ConfirmationEmailDispatcher(
+        return new EmailDispatcher(
             _queue,
             _composer.Object,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
@@ -136,7 +150,7 @@ public sealed class ConfirmationEmailDispatcherTests
             _logger.Object);
     }
 
-    private async Task<ConfirmationEmailMessage> DequeueAsync()
+    private async Task<OutgoingEmailMessage> DequeueAsync()
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await foreach (var message in _queue.ReadAllAsync(timeout.Token))
@@ -158,10 +172,10 @@ public sealed class ConfirmationEmailDispatcherTests
         Assert.True(condition());
     }
 
-    private static ConfirmationEmailMessage CreateMessage(string recipient = "ana@exemplo.com", int attemptNumber = 1) =>
-        new(42, recipient, "Ana", "https://ragauth.com.br/link", attemptNumber);
+    private static OutgoingEmailMessage CreateMessage(string recipient = "ana@exemplo.com", int attemptNumber = 1) =>
+        new(EmailKind.EmailConfirmation, 42, recipient, "Ana", "https://ragauth.com.br/link", AttemptNumber: attemptNumber);
 
-    private sealed class RecordingEmailSender : IConfirmationEmailSender
+    private sealed class RecordingEmailSender : IEmailSender
     {
         private readonly List<string> _sentRecipients = [];
 
@@ -171,7 +185,7 @@ public sealed class ConfirmationEmailDispatcherTests
 
         public IReadOnlyList<string> SentRecipients => _sentRecipients;
 
-        public Task SendAsync(ConfirmationEmail email, CancellationToken cancellationToken)
+        public Task SendAsync(ComposedEmail email, CancellationToken cancellationToken)
         {
             AttemptCount++;
             if (FailuresBeforeSuccess > 0)

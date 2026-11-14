@@ -30,7 +30,7 @@ public sealed class EndpointHandlersTests
 
         var result = await AuthEndpoints.RegisterAsync(request, _authService.Object, CancellationToken.None);
 
-        AssertEnvelope(result, StatusCodes.Status201Created, "Cadastro realizado com sucesso.", registeredClient);
+        AssertEnvelope(result, StatusCodes.Status201Created, "Cadastro realizado com sucesso. Confirme o cadastro com seu e-mail", registeredClient);
     }
 
     [Fact]

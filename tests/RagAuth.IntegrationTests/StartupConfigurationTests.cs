@@ -14,17 +14,34 @@ public sealed class StartupConfigurationTests
     [InlineData("RAG_API_KEY")]
     [InlineData("RESEND_API_KEY")]
     [InlineData("email:fromAddress")]
+    [InlineData("email:passwordRecoveryPageBaseUrl")]
     public void ApplicationDoesNotStartWhenSecretIsMissing(string secretName)
     {
         var settings = CreateValidSettings();
         settings[secretName] = string.Empty;
+
+        var validationException = StartAndCaptureValidationException(settings);
+
+        Assert.Contains(secretName, validationException.Message);
+    }
+
+    [Fact]
+    public void ApplicationDoesNotStartWhenPasswordRecoveryPageIsNotAnAbsoluteUrl()
+    {
+        var settings = CreateValidSettings();
+        settings["email:passwordRecoveryPageBaseUrl"] = "nao-e-uma-url";
+
+        var validationException = StartAndCaptureValidationException(settings);
+
+        Assert.Contains("A configuração 'email:passwordRecoveryPageBaseUrl' deve ser uma URL absoluta.", validationException.Message);
+    }
+
+    private static OptionsValidationException StartAndCaptureValidationException(Dictionary<string, string?> settings)
+    {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings)));
 
-        var startupException = Record.Exception(() => factory.CreateClient());
-
-        var validationException = FindOptionsValidationException(startupException);
-        Assert.Contains(secretName, validationException.Message);
+        return FindOptionsValidationException(Record.Exception(() => factory.CreateClient()));
     }
 
     private static Dictionary<string, string?> CreateValidSettings() => new()

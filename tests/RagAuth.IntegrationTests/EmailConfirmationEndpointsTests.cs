@@ -41,7 +41,7 @@ public sealed class EmailConfirmationEndpointsTests(RagAuthApiFactory factory) :
         Assert.Contains("https://ragauth.com.br/", email.HtmlBody);
         Assert.Contains("24 horas", email.HtmlBody);
         Assert.Contains("solicite um novo link", email.HtmlBody);
-        Assert.Matches("/api/v1/client/[A-Za-z0-9_-]{22}/confirmation-register/[A-Za-z0-9_-]{43}$", FakeConfirmationEmailSender.ExtractConfirmationPath(email));
+        Assert.Matches("/api/v1/client/[A-Za-z0-9_-]{22}/confirmation-register/[A-Za-z0-9_-]{43}$", FakeEmailSender.ExtractConfirmationPath(email));
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class EmailConfirmationEndpointsTests(RagAuthApiFactory factory) :
     {
         var response = await _httpClient.PostAsJsonAsync(TestClientAccounts.RegisterPath, new { name = "Ana", email = "ana@exemplo.com", password = TestClientAccounts.DefaultPassword });
 
-        var data = await ApiEnvelopeAssertions.AssertSuccessAsync(response, HttpStatusCode.Created, "Cadastro realizado com sucesso.");
+        var data = await ApiEnvelopeAssertions.AssertSuccessAsync(response, HttpStatusCode.Created, "Cadastro realizado com sucesso. Confirme o cadastro com seu e-mail");
         var propertyNames = data.EnumerateObject().Select(property => property.Name).Order().ToArray();
         Assert.Equal(["accessCode", "clientId", "createdAt", "email", "name"], propertyNames);
     }
@@ -163,7 +163,7 @@ public sealed class EmailConfirmationEndpointsTests(RagAuthApiFactory factory) :
         Assert.Equal(3, factory.EmailSender.AttemptCount);
         Assert.Empty(factory.EmailSender.SentEmails);
         Assert.False((await LoadClientAsync(account.ClientId)).EmailConfirmed);
-        Assert.Equal(3, factory.LogCapture.Entries.Count(entry => entry.Level == LogLevel.Warning && entry.Category == typeof(ConfirmationEmailDispatcher).FullName));
+        Assert.Equal(3, factory.LogCapture.Entries.Count(entry => entry.Level == LogLevel.Warning && entry.Category == typeof(EmailDispatcher).FullName));
         Assert.Contains(factory.LogCapture.Entries, entry => entry.Level == LogLevel.Error && entry.Message.Contains("esgotou as 3 tentativas"));
     }
 
@@ -202,9 +202,9 @@ public sealed class EmailConfirmationEndpointsTests(RagAuthApiFactory factory) :
         var secondEmail = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", EmailTimeout, expectedCount: 2);
 
         await ApiEnvelopeAssertions.AssertSuccessAsync(response, HttpStatusCode.Accepted, NewLinkAcceptedMessage);
-        var oldLinkResponse = await _httpClient.GetAsync(FakeConfirmationEmailSender.ExtractConfirmationPath(firstEmail));
+        var oldLinkResponse = await _httpClient.GetAsync(FakeEmailSender.ExtractConfirmationPath(firstEmail));
         await ApiEnvelopeAssertions.AssertErrorAsync(oldLinkResponse, HttpStatusCode.BadRequest, InvalidLinkMessage);
-        var newLinkResponse = await _httpClient.GetAsync(FakeConfirmationEmailSender.ExtractConfirmationPath(secondEmail));
+        var newLinkResponse = await _httpClient.GetAsync(FakeEmailSender.ExtractConfirmationPath(secondEmail));
         await ApiEnvelopeAssertions.AssertSuccessAsync(newLinkResponse, HttpStatusCode.OK, ConfirmedMessage);
     }
 
@@ -217,7 +217,7 @@ public sealed class EmailConfirmationEndpointsTests(RagAuthApiFactory factory) :
         await RequestNewLinkAsync("ana@exemplo.com");
         var newEmail = await factory.EmailSender.WaitForEmailAsync("ana@exemplo.com", EmailTimeout, expectedCount: 2);
 
-        var response = await _httpClient.GetAsync(FakeConfirmationEmailSender.ExtractConfirmationPath(newEmail));
+        var response = await _httpClient.GetAsync(FakeEmailSender.ExtractConfirmationPath(newEmail));
         await ApiEnvelopeAssertions.AssertSuccessAsync(response, HttpStatusCode.OK, ConfirmedMessage);
     }
 
@@ -304,14 +304,14 @@ public sealed class EmailConfirmationEndpointsTests(RagAuthApiFactory factory) :
         Assert.Equal(2, factory.EmailSender.EmailsTo(account.Email).Count);
     }
 
-    private async Task<ConfirmationEmail> RegisterAndWaitForFirstEmailAsync(string email = "ana@exemplo.com")
+    private async Task<ComposedEmail> RegisterAndWaitForFirstEmailAsync(string email = "ana@exemplo.com")
     {
         await TestClientAccounts.RegisterPendingAsync(_httpClient, email);
         return await factory.EmailSender.WaitForEmailAsync(email, EmailTimeout);
     }
 
     private async Task<string> WaitForConfirmationPathAsync(string email) =>
-        FakeConfirmationEmailSender.ExtractConfirmationPath(await factory.EmailSender.WaitForEmailAsync(email, EmailTimeout));
+        FakeEmailSender.ExtractConfirmationPath(await factory.EmailSender.WaitForEmailAsync(email, EmailTimeout));
 
     private Task<HttpResponseMessage> RequestNewLinkAsync(string email) =>
         _httpClient.PostAsJsonAsync(NewLinkPath, new { email });

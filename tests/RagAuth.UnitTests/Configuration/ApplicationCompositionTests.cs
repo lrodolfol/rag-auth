@@ -18,6 +18,7 @@ using RagAuth.Api.Infrastructure.RagApi;
 using RagAuth.Api.Services.Auth;
 using RagAuth.Api.Services.Business;
 using RagAuth.Api.Services.Clients;
+using RagAuth.Api.Services.PasswordRecovery;
 using RagAuth.Api.Services.EmailConfirmation;
 using Resend;
 
@@ -61,12 +62,15 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRagApiClient>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IEmailConfirmationService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPasswordRecoveryService>());
+        Assert.IsType<PasswordRecoveryLinkIssuePolicy>(scope.ServiceProvider.GetRequiredService<IPasswordRecoveryLinkIssuePolicy>());
+        Assert.IsType<StopwatchMinimumResponseDurationGuard>(_application.Services.GetRequiredService<IMinimumResponseDurationGuard>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IResend>());
-        Assert.IsType<ResendConfirmationEmailSender>(scope.ServiceProvider.GetRequiredService<IConfirmationEmailSender>());
+        Assert.IsType<ResendEmailSender>(scope.ServiceProvider.GetRequiredService<IEmailSender>());
         Assert.Same(
-            _application.Services.GetRequiredService<IConfirmationEmailQueue>(),
-            scope.ServiceProvider.GetRequiredService<IConfirmationEmailQueue>());
-        Assert.Contains(_application.Services.GetServices<IHostedService>(), service => service is ConfirmationEmailDispatcher);
+            _application.Services.GetRequiredService<IEmailQueue>(),
+            scope.ServiceProvider.GetRequiredService<IEmailQueue>());
+        Assert.Contains(_application.Services.GetServices<IHostedService>(), service => service is EmailDispatcher);
         var databaseContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Contains("Password=senha", databaseContext.Database.GetConnectionString());
     }
@@ -87,10 +91,23 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
         var emailOptions = _application.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
 
         Assert.Equal("RagAuth", emailOptions.AppName);
-        Assert.Equal("https://ragauth.com.br", emailOptions.ConfirmationPageBaseUrl);
+        Assert.Equal("http://localhost:1010", emailOptions.ConfirmationPageBaseUrl);
         Assert.Equal(5, emailOptions.NewLinkIntervalMinutes);
         Assert.Equal(10, emailOptions.MaximumNewLinksPerDay);
-        Assert.Equal([30, 120], emailOptions.RetryDelaysSeconds);
+        Assert.Equal([10, 20], emailOptions.RetryDelaysSeconds);
+        Assert.Equal(emailOptions.ConfirmationPageBaseUrl, emailOptions.PasswordRecoveryPageBaseUrl);
+        Assert.Equal(5, emailOptions.PasswordRecoveryIntervalMinutes);
+        Assert.Equal(10, emailOptions.MaximumPasswordRecoveryLinksPerDay);
+        Assert.Equal(300, emailOptions.PasswordRecoveryMinimumResponseMilliseconds);
+    }
+
+    [Fact]
+    public void EmailOptionsCodeDefaultsPointToProductionPages()
+    {
+        var emailOptions = new EmailOptions();
+
+        Assert.Equal("https://ragauth.com.br", emailOptions.ConfirmationPageBaseUrl);
+        Assert.Equal("https://ragauth.com.br", emailOptions.PasswordRecoveryPageBaseUrl);
     }
 
     [Fact]

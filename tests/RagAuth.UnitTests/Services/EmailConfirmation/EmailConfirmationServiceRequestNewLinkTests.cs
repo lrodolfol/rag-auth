@@ -1,5 +1,6 @@
 using Moq;
 using RagAuth.Api.Domain.Entities;
+using RagAuth.Api.Infrastructure.Email;
 using RagAuth.Api.Infrastructure.Persistence;
 using RagAuth.Api.Services.EmailConfirmation;
 using RagAuth.UnitTests.TestDoubles;
@@ -21,7 +22,7 @@ public sealed class EmailConfirmationServiceRequestNewLinkTests
     {
         _client = _fixture.CreatePendingClient();
         _activeLink = new EmailConfirmationLink { ClientId = _client.Id, Client = _client };
-        var message = new ConfirmationEmailMessage(_client.Id, _client.Email, _client.Name, "https://ragauth.com.br/novo");
+        var message = new OutgoingEmailMessage(EmailKind.EmailConfirmation, _client.Id, _client.Email, _client.Name, "https://ragauth.com.br/novo");
         _newLink = new IssuedConfirmationLink(new EmailConfirmationLink { Client = _client }, "validator", message);
         _fixture.ClientRepository.Setup(repository => repository.FindPendingByEmailAsync("ana@exemplo.com", It.IsAny<CancellationToken>()))
             .ReturnsAsync(_client);
@@ -87,7 +88,7 @@ public sealed class EmailConfirmationServiceRequestNewLinkTests
 
         Assert.Null(exception);
         _fixture.UnitOfWorkMocks.Transaction.Verify(transaction => transaction.CommitAsync(It.IsAny<CancellationToken>()), Times.Never());
-        _fixture.EmailQueue.Verify(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>()), Times.Never());
+        _fixture.EmailQueue.Verify(queue => queue.TryEnqueue(It.IsAny<OutgoingEmailMessage>()), Times.Never());
         Assert.Equal([NewLinkThrottledEventId], _fixture.Logger.LoggedEventIds());
     }
 
@@ -104,7 +105,7 @@ public sealed class EmailConfirmationServiceRequestNewLinkTests
     [Fact]
     public async Task FullQueueIsLoggedWithoutFailingTheRequest()
     {
-        _fixture.EmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>())).Returns(false);
+        _fixture.EmailQueue.Setup(queue => queue.TryEnqueue(It.IsAny<OutgoingEmailMessage>())).Returns(false);
 
         await _fixture.CreateService().RequestNewLinkAsync("ana@exemplo.com");
 
@@ -115,6 +116,6 @@ public sealed class EmailConfirmationServiceRequestNewLinkTests
     {
         _fixture.LinkIssuer.Verify(issuer => issuer.Issue(It.IsAny<Client>(), It.IsAny<string>()), Times.Never());
         _fixture.UnitOfWorkMocks.UnitOfWork.Verify(unitOfWork => unitOfWork.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never());
-        _fixture.EmailQueue.Verify(queue => queue.TryEnqueue(It.IsAny<ConfirmationEmailMessage>()), Times.Never());
+        _fixture.EmailQueue.Verify(queue => queue.TryEnqueue(It.IsAny<OutgoingEmailMessage>()), Times.Never());
     }
 }

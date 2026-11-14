@@ -7,12 +7,12 @@ using Resend;
 
 namespace RagAuth.UnitTests.Infrastructure.Email;
 
-public sealed class ResendConfirmationEmailSenderTests
+public sealed class ResendEmailSenderTests
 {
     private readonly Mock<IResend> _resend = new();
     private EmailMessage? _sentMessage;
 
-    public ResendConfirmationEmailSenderTests() =>
+    public ResendEmailSenderTests() =>
         _resend.Setup(resend => resend.EmailSendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
             .Callback<EmailMessage, CancellationToken>((message, _) => _sentMessage = message)
             .ReturnsAsync(new ResendResponse<Guid>(Guid.NewGuid(), null));
@@ -20,7 +20,7 @@ public sealed class ResendConfirmationEmailSenderTests
     [Fact]
     public async Task SendMapsEmailToResendMessage()
     {
-        await CreateSender().SendAsync(new ConfirmationEmail("ana@exemplo.com", "Assunto", "<p>Corpo</p>"), CancellationToken.None);
+        await CreateSender().SendAsync(new ComposedEmail("ana@exemplo.com", "Assunto", "<p>Corpo</p>"), CancellationToken.None);
 
         Assert.NotNull(_sentMessage);
         Assert.Equal("nao-responda@ragauth.com.br", _sentMessage.From!.Email);
@@ -36,8 +36,8 @@ public sealed class ResendConfirmationEmailSenderTests
         _resend.Setup(resend => resend.EmailSendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ResendResponse<Guid>(resendException, null));
 
-        var exception = await Assert.ThrowsAsync<ConfirmationEmailDeliveryException>(
-            () => CreateSender().SendAsync(new ConfirmationEmail("ana@exemplo.com", "Assunto", "Corpo"), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<EmailDeliveryException>(
+            () => CreateSender().SendAsync(new ComposedEmail("ana@exemplo.com", "Assunto", "Corpo"), CancellationToken.None));
 
         Assert.Same(resendException, exception.InnerException);
     }
@@ -49,9 +49,9 @@ public sealed class ResendConfirmationEmailSenderTests
             .ThrowsAsync(new HttpRequestException("Conexão recusada."));
 
         await Assert.ThrowsAsync<HttpRequestException>(
-            () => CreateSender().SendAsync(new ConfirmationEmail("ana@exemplo.com", "Assunto", "Corpo"), CancellationToken.None));
+            () => CreateSender().SendAsync(new ComposedEmail("ana@exemplo.com", "Assunto", "Corpo"), CancellationToken.None));
     }
 
-    private ResendConfirmationEmailSender CreateSender() =>
+    private ResendEmailSender CreateSender() =>
         new(_resend.Object, Options.Create(new EmailOptions { FromAddress = "nao-responda@ragauth.com.br" }));
 }
