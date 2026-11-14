@@ -16,8 +16,9 @@ public sealed class PersistenceSchemaTests(RagAuthApiFactory factory) : IAsyncLi
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Theory]
-    [InlineData("clients", new[] { "id", "accessCode", "name", "email", "passwordHash", "createdAt", "updatedAt", "deletedAt", "emailConfirmed", "emailConfirmedAt" })]
+    [InlineData("clients", new[] { "id", "accessCode", "name", "email", "passwordHash", "createdAt", "updatedAt", "deletedAt", "emailConfirmed", "emailConfirmedAt", "passwordChangedAt" })]
     [InlineData("email_confirmation_links", new[] { "id", "clientId", "selector", "validatorHash", "purpose", "origin", "issuedAt", "expiresAt", "usedAt", "revokedAt" })]
+    [InlineData("password_recovery_links", new[] { "id", "clientId", "selector", "validatorHash", "purpose", "issuedAt", "expiresAt", "usedAt", "revokedAt" })]
     [InlineData("businesses", new[] { "id", "clientId", "name", "description", "email", "telephone", "address", "details", "createdAt", "updatedAt" })]
     public async Task MigrationCreatesTablesWithCamelCaseColumns(string tableName, string[] expectedColumns)
     {
@@ -85,6 +86,26 @@ public sealed class PersistenceSchemaTests(RagAuthApiFactory factory) : IAsyncLi
             Assert.Contains(indexDefinitions, index => index.StartsWith(UniqueIndexNames.ActiveEmailConfirmationLinkPerClient, StringComparison.Ordinal)
                 && index.Contains("UNIQUE") && index.Contains("\"usedAt\" IS NULL") && index.Contains("\"revokedAt\" IS NULL"));
             Assert.Contains(indexDefinitions, index => index.StartsWith("ix_email_confirmation_links_client_issued", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public async Task PasswordRecoveryIndexesAndNullablePasswordChangedAtExist()
+    {
+        await factory.ExecuteInDatabaseAsync(async databaseContext =>
+        {
+            var passwordChangedAtNullable = await databaseContext.Database
+                .SqlQuery<string>($"SELECT is_nullable AS \"Value\" FROM information_schema.columns WHERE table_name = 'clients' AND column_name = 'passwordChangedAt'")
+                .SingleAsync();
+            var indexDefinitions = await databaseContext.Database
+                .SqlQuery<string>($"SELECT indexname || ' ' || indexdef AS \"Value\" FROM pg_indexes WHERE tablename = 'password_recovery_links'")
+                .ToListAsync();
+
+            Assert.Equal("YES", passwordChangedAtNullable);
+            Assert.Contains(indexDefinitions, index => index.StartsWith(UniqueIndexNames.PasswordRecoveryLinkSelector, StringComparison.Ordinal) && index.Contains("UNIQUE"));
+            Assert.Contains(indexDefinitions, index => index.StartsWith(UniqueIndexNames.ActivePasswordRecoveryLinkPerClient, StringComparison.Ordinal)
+                && index.Contains("UNIQUE") && index.Contains("\"usedAt\" IS NULL") && index.Contains("\"revokedAt\" IS NULL"));
+            Assert.Contains(indexDefinitions, index => index.StartsWith("ix_password_recovery_links_client_issued", StringComparison.Ordinal));
         });
     }
 

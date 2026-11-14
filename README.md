@@ -13,6 +13,8 @@ Especificação, plano e contratos: [`specs/001-rag-auth-gateway/`](specs/001-ra
 Validação ponta a ponta: [`quickstart.md`](specs/001-rag-auth-gateway/quickstart.md).
 Confirmação de e-mail: [`specs/002-email-confirmation/`](specs/002-email-confirmation/)
 ([`quickstart.md`](specs/002-email-confirmation/quickstart.md)).
+Recuperação de senha: [`specs/003-password-recovery/`](specs/003-password-recovery/)
+([`quickstart.md`](specs/003-password-recovery/quickstart.md)).
 
 ## Rotas
 
@@ -22,6 +24,9 @@ Confirmação de e-mail: [`specs/002-email-confirmation/`](specs/002-email-confi
 | `POST` | `/api/v1/auth/login` (devolve também o negócio; 403 se o e-mail não foi confirmado) | não |
 | `GET` | `/api/v1/client/{clientIdentificationHash}/confirmation-register/{keyHash}` (confirma o e-mail; chamada pelo front-end aberto pelo link) | não |
 | `POST` | `/api/v1/client/new-confirmation-register` (`{ "email": "..." }`; pede novo link, resposta sempre 202) | não |
+| `POST` | `/api/v1/client/new-pass-recuvery-request` (`{ "email": "..." }`; pede a recuperação de senha, resposta sempre 202) | não |
+| `GET` | `/api/v1/client/{selector}/pass-recuvery/{validator}` (verifica o link de recuperação sem consumi-lo) | não |
+| `PUT` | `/api/v1/client/{selector}/pass-recuvery/{validator}` (`{ "newPassword", "newPasswordConfirmation" }`; troca a senha, sem login automático) | não |
 | `POST` / `PUT` / `DELETE` | `/api/v1/{clientId}/business` | sim, `{clientId}` = claim `client_id` |
 | `DELETE` | `/api/v1/{clientId}` (remove a própria conta) | sim, `{clientId}` = claim `client_id` |
 
@@ -45,11 +50,11 @@ As chaves não secretas ficam em `src/RagAuth.Api/appsettings.json` (local), `ap
 | `DATABASE_PASSWORD` | senha do PostgreSQL |
 | `JWT_SIGNING_KEY` | chave HS256, no mínimo 32 caracteres |
 | `RAG_API_KEY` | valor enviado em `x-api-key` à API RAG |
-| `RESEND_API_KEY` | token da API do Resend, usado no envio do e-mail de confirmação |
+| `RESEND_API_KEY` | token da API do Resend, usado no envio dos e-mails (confirmação, recuperação e aviso de senha alterada) |
 
 Se faltar algum segredo, a aplicação não inicia e a mensagem cita a variável ausente.
 
-Seção `email` (confirmação de cadastro):
+Seção `email` (confirmação de cadastro e recuperação de senha):
 
 | Chave | Padrão | Uso |
 |---|---|---|
@@ -59,9 +64,14 @@ Seção `email` (confirmação de cadastro):
 | `newLinkIntervalMinutes` | `5` | intervalo mínimo entre links da mesma conta |
 | `maximumNewLinksPerDay` | `10` | máximo de pedidos de novo link atendidos em 24 horas |
 | `retryDelaysSeconds` | `[30, 120]` | espera antes da 2ª e da 3ª tentativa de envio |
+| `passwordRecoveryPageBaseUrl` | `https://ragauth.com.br` | página do front-end que recebe o link de recuperação (`{base}/{selector}/pass-recuvery/{validator}`) |
+| `passwordRecoveryIntervalMinutes` | `5` | intervalo mínimo entre links de recuperação da mesma conta |
+| `maximumPasswordRecoveryLinksPerDay` | `10` | máximo de links de recuperação emitidos em 24 horas por conta |
+| `passwordRecoveryMinimumResponseMilliseconds` | `300` | duração mínima do pedido de recuperação, para o tempo de resposta não revelar se o e-mail tem conta |
 
-O link vale 24 horas (fixo). A migration `EmailConfirmation` marca como confirmadas as contas que já
-existiam.
+Os links de confirmação e de recuperação valem 24 horas (fixo). A migration `EmailConfirmation` marca
+como confirmadas as contas que já existiam. A migration `PasswordRecovery` cria a tabela
+`password_recovery_links` e a coluna `clients.passwordChangedAt`, sem alterar dados.
 
 > No Windows, nomes de variáveis de ambiente não diferenciam maiúsculas: uma variável já existente
 > como `database_password` (de outro projeto) sobrescreve `DATABASE_PASSWORD`. Remova-a da sessão

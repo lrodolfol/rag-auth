@@ -23,7 +23,7 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
     public Task DisposeAsync() => Task.CompletedTask;
 
     [Fact]
-    public void OnlyRegisterLoginEmailConfirmationAndNewLinkAreOpen()
+    public void OnlyRegisterLoginEmailConfirmationAndPasswordRecoveryAreOpen()
     {
         var openRoutes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
@@ -37,9 +37,26 @@ public sealed class ProtectedRouteTests(RagAuthApiFactory factory) : IAsyncLifet
                 "/api/v1/auth/login",
                 "/api/v1/auth/register",
                 "/api/v1/client/new-confirmation-register",
+                "/api/v1/client/new-pass-recuvery-request",
                 "/api/v1/client/{clientIdentificationHash}/confirmation-register/{keyHash}",
+                "/api/v1/client/{selector}/pass-recuvery/{validator}",
+                "/api/v1/client/{selector}/pass-recuvery/{validator}",
             ],
             openRoutes);
+    }
+
+    [Fact]
+    public async Task PasswordRecoveryRoutesAnswerWithoutToken()
+    {
+        var linkPath = $"/api/v1/client/{new string('A', 22)}/pass-recuvery/{new string('B', 43)}";
+
+        var requestResponse = await _httpClient.PostAsJsonAsync("/api/v1/client/new-pass-recuvery-request", new { email = "ana@exemplo.com" });
+        var verifyResponse = await _httpClient.GetAsync(linkPath);
+        var resetResponse = await _httpClient.PutAsJsonAsync(linkPath, new { newPassword = "NovaSenha123", newPasswordConfirmation = "NovaSenha123" });
+
+        Assert.Equal(HttpStatusCode.Accepted, requestResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, verifyResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, resetResponse.StatusCode);
     }
 
     [Fact]

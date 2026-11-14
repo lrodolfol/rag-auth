@@ -24,6 +24,7 @@ public static class ApplicationServiceExtensions
             .AddBusinessServices()
             .AddClientServices()
             .AddEmailConfirmation()
+            .AddPasswordRecovery()
             .AddEmailServices()
             .AddRagApiClient();
         return builder;
@@ -40,6 +41,7 @@ public static class ApplicationServiceExtensions
         app.MapBusinessEndpoints();
         app.MapClientEndpoints();
         app.MapEmailConfirmationEndpoints();
+        app.MapPasswordRecoveryEndpoints();
         return app;
     }
 }

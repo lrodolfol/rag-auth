@@ -19,7 +19,7 @@ public sealed class AuthService(
     IAccessTokenIssuer accessTokenIssuer,
     IBusinessService businessService,
     IConfirmationLinkIssuer confirmationLinkIssuer,
-    IConfirmationEmailQueue confirmationEmailQueue,
+    IEmailQueue emailQueue,
     ILogger<AuthService> logger) : IAuthService
 {
     public const int MaximumAccessCodeAttempts = 5;
@@ -103,11 +103,11 @@ public sealed class AuthService(
         }
     }
 
-    private void EnqueueConfirmationEmail(ConfirmationEmailMessage message)
+    private void EnqueueConfirmationEmail(OutgoingEmailMessage message)
     {
-        if (!confirmationEmailQueue.TryEnqueue(message))
+        if (!emailQueue.TryEnqueue(message))
         {
-            LogMessages.ConfirmationEmailQueueRejected(logger, message.ClientId);
+            LogMessages.EmailQueueRejected(logger, EmailKind.EmailConfirmation, message.ClientId);
         }
     }
 

@@ -12,10 +12,10 @@ public static class EmailServiceExtensions
         services.AddOptions<ResendClientOptions>()
             .Configure<IOptions<EmailOptions>>((resendOptions, emailOptions) => resendOptions.ApiToken = emailOptions.Value.ResendApiKey);
         services.AddHttpClient<IResend, ResendClient>();
-        services.AddSingleton<IConfirmationEmailQueue, ChannelConfirmationEmailQueue>();
-        services.AddSingleton<IConfirmationEmailComposer, HtmlConfirmationEmailComposer>();
-        services.AddScoped<IConfirmationEmailSender, ResendConfirmationEmailSender>();
-        services.AddHostedService<ConfirmationEmailDispatcher>();
+        services.AddSingleton<IEmailQueue, ChannelEmailQueue>();
+        services.AddSingleton<IEmailComposer, HtmlEmailComposer>();
+        services.AddScoped<IEmailSender, ResendEmailSender>();
+        services.AddHostedService<EmailDispatcher>();
         return services;
     }
 }

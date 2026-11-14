@@ -5,16 +5,17 @@ using RagAuth.Api.Infrastructure.Email;
 using RagAuth.Api.Infrastructure.Persistence;
 using RagAuth.Api.Infrastructure.Persistence.Repositories;
 using RagAuth.Api.Observability;
+using RagAuth.Api.Services.SecureLinks;
 
 namespace RagAuth.Api.Services.EmailConfirmation;
 
 public sealed class EmailConfirmationService(
     IEmailConfirmationLinkRepository linkRepository,
     IClientRepository clientRepository,
-    IConfirmationLinkGenerator linkGenerator,
+    ISecureLinkGenerator linkGenerator,
     IConfirmationLinkIssuer linkIssuer,
     IConfirmationLinkIssuePolicy issuePolicy,
-    IConfirmationEmailQueue emailQueue,
+    IEmailQueue emailQueue,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
     ILogger<EmailConfirmationService> logger) : IEmailConfirmationService
@@ -54,10 +55,10 @@ public sealed class EmailConfirmationService(
     // Formato, existência e hash são verificados juntos: qualquer falha é o mesmo "link inválido" (FR-010).
     private async Task<EmailConfirmationLink> FindMatchingLinkAsync(string selector, string validator, CancellationToken cancellationToken)
     {
-        var link = ConfirmationLinkFormat.IsValid(selector, validator)
+        var link = SecureLinkFormat.IsValid(selector, validator)
             ? await linkRepository.FindBySelectorWithClientAsync(selector, cancellationToken)
             : null;
-        if (link is null || !linkGenerator.IsValidatorMatch(validator, link.Client.AccessCode, link.ValidatorHash))
+        if (link is null || !linkGenerator.IsValidatorMatch(validator, link.Client.AccessCode, EmailConfirmationLink.EmailConfirmationPurpose, link.ValidatorHash))
         {
             throw CreateInvalidLinkException();
         }
@@ -133,11 +134,11 @@ public sealed class EmailConfirmationService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    private void EnqueueConfirmationEmail(ConfirmationEmailMessage message)
+    private void EnqueueConfirmationEmail(OutgoingEmailMessage message)
     {
         if (!emailQueue.TryEnqueue(message))
         {
-            LogMessages.ConfirmationEmailQueueRejected(logger, message.ClientId);
+            LogMessages.EmailQueueRejected(logger, EmailKind.EmailConfirmation, message.ClientId);
         }
     }
 }
