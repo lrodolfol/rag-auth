@@ -19,7 +19,18 @@ public static class OptionsServiceExtensions
             .PostConfigure(options => options.ApiKey = ReadSecret(configuration, EnvironmentSecretNames.RagApiKey))
             .ValidateDataAnnotations()
             .ValidateOnStart();
-        return services.AddEmailOptions(configuration);
+        return services
+            .AddEmailOptions(configuration)
+            .AddFrontendCorsOptions(configuration);
+    }
+
+    private static IServiceCollection AddFrontendCorsOptions(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<FrontendCorsOptions>()
+            .Bind(configuration.GetSection(FrontendCorsOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        return services;
     }
 
     private static IServiceCollection AddEmailOptions(this IServiceCollection services, IConfiguration configuration)

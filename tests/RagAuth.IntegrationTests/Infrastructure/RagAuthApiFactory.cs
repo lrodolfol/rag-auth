@@ -24,6 +24,7 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
     public const string ResendApiKey = "re_chave-secreta-do-resend-nos-testes";
     public const string EmailFromAddress = "nao-responda@ragauth.teste";
     public const string PageBaseUrl = "https://ragauth.com.br";
+    public const string FrontendOrigin = "http://localhost:4200";
 
     private readonly PostgreSqlContainer _databaseContainer = new PostgreSqlBuilder("postgres:17").Build();
 
@@ -114,6 +115,7 @@ public sealed class RagAuthApiFactory : WebApplicationFactory<Program>, IAsyncLi
             ["email:passwordRecoveryPageBaseUrl"] = PageBaseUrl,
             ["email:retryDelaysSeconds:0"] = "0",
             ["email:retryDelaysSeconds:1"] = "0",
+            ["cors:allowedOrigins:0"] = FrontendOrigin,
         };
     }
 }
