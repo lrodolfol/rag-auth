@@ -73,6 +73,17 @@ Os links de confirmação e de recuperação valem 24 horas (fixo). A migration 
 como confirmadas as contas que já existiam. A migration `PasswordRecovery` cria a tabela
 `password_recovery_links` e a coluna `clients.passwordChangedAt`, sem alterar dados.
 
+Seção `cors` (acesso do front-end pelo navegador):
+
+| Chave | Padrão | Uso |
+|---|---|---|
+| `allowedOrigins` | `["http://localhost:4200"]` | origens autorizadas a chamar a API pelo navegador, com os métodos GET, POST, PUT e DELETE e qualquer cabeçalho |
+
+Para liberar outro front-end (UAT, produção), inclua a origem na lista do `appsettings` do ambiente.
+A barra final é ignorada. Cookies não são aceitos entre origens: o token vai no cabeçalho
+`Authorization`. A aplicação não inicia se a lista estiver vazia ou tiver algo que não seja uma URL
+absoluta `http`/`https`.
+
 > No Windows, nomes de variáveis de ambiente não diferenciam maiúsculas: uma variável já existente
 > como `database_password` (de outro projeto) sobrescreve `DATABASE_PASSWORD`. Remova-a da sessão
 > antes de rodar a API.

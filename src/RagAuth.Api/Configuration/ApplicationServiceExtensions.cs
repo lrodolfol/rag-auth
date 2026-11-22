@@ -20,6 +20,7 @@ public static class ApplicationServiceExtensions
             .AddObservability()
             .AddValidation()
             .AddJwtAuthentication()
+            .AddFrontendCors()
             .AddAuthServices()
             .AddBusinessServices()
             .AddClientServices()
@@ -33,6 +34,7 @@ public static class ApplicationServiceExtensions
     public static WebApplication MapApplication(this WebApplication app)
     {
         app.UseMiddleware<CorrelationIdMiddleware>();
+        app.UseCors(CorsServiceExtensions.FrontendPolicyName);
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseAuthentication();

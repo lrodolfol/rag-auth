@@ -45,6 +45,7 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
             ["RAG_API_KEY"] = "chave-rag",
             ["RESEND_API_KEY"] = "re_chave-resend",
             ["email:fromAddress"] = "nao-responda@ragauth.com.br",
+            ["cors:allowedOrigins:0"] = "http://localhost:4200",
         });
         builder.AddApplication();
         _application = builder.Build();
@@ -81,6 +82,7 @@ public sealed class ApplicationCompositionTests : IAsyncDisposable
         Assert.Equal("senha", _application.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value.Password);
         Assert.Equal("chave-rag", _application.Services.GetRequiredService<IOptions<RagApiOptions>>().Value.ApiKey);
         Assert.Equal(7, _application.Services.GetRequiredService<IOptions<RagApiOptions>>().Value.TimeoutSeconds);
+        Assert.Contains("http://localhost:4200", _application.Services.GetRequiredService<IOptions<FrontendCorsOptions>>().Value.AllowedOrigins);
         Assert.Equal("re_chave-resend", _application.Services.GetRequiredService<IOptions<EmailOptions>>().Value.ResendApiKey);
         Assert.Equal("re_chave-resend", _application.Services.GetRequiredService<IOptions<ResendClientOptions>>().Value.ApiToken);
     }

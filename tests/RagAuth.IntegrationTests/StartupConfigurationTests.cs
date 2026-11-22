@@ -36,6 +36,19 @@ public sealed class StartupConfigurationTests
         Assert.Contains("A configuração 'email:passwordRecoveryPageBaseUrl' deve ser uma URL absoluta.", validationException.Message);
     }
 
+    [Theory]
+    [InlineData("", "A configuração 'cors:allowedOrigins' deve conter apenas URLs absolutas.")]
+    [InlineData("nao-e-uma-url", "A configuração 'cors:allowedOrigins' deve conter apenas URLs absolutas.")]
+    public void ApplicationDoesNotStartWhenCorsOriginIsInvalid(string origin, string expectedMessage)
+    {
+        var settings = CreateValidSettings();
+        settings["cors:allowedOrigins:0"] = origin;
+
+        var validationException = StartAndCaptureValidationException(settings);
+
+        Assert.Contains(expectedMessage, validationException.Message);
+    }
+
     private static OptionsValidationException StartAndCaptureValidationException(Dictionary<string, string?> settings)
     {
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -51,6 +64,7 @@ public sealed class StartupConfigurationTests
         ["RAG_API_KEY"] = RagAuthApiFactory.RagApiKey,
         ["RESEND_API_KEY"] = RagAuthApiFactory.ResendApiKey,
         ["email:fromAddress"] = RagAuthApiFactory.EmailFromAddress,
+        ["cors:allowedOrigins:0"] = RagAuthApiFactory.FrontendOrigin,
     };
 
     private static OptionsValidationException FindOptionsValidationException(Exception? exception)
