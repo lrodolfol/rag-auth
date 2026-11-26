@@ -42,6 +42,7 @@ public sealed class CorsTests(RagAuthApiFactory factory) : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("GET")]
     [InlineData("POST")]
     [InlineData("PUT")]
     [InlineData("DELETE")]
@@ -71,6 +72,19 @@ public sealed class CorsTests(RagAuthApiFactory factory) : IAsyncLifetime
         var response = await _httpClient.SendAsync(request);
 
         await ApiEnvelopeAssertions.AssertErrorAsync(response, HttpStatusCode.Unauthorized, UnauthenticatedMessage);
+        Assert.Equal(RagAuthApiFactory.FrontendOrigin, ReadHeader(response, AllowOriginHeader));
+    }
+
+    [Fact]
+    public async Task DashboardFromFrontendOriginAllowsOrigin()
+    {
+        var account = await TestClientAccounts.RegisterAndLoginAsync(factory, _httpClient);
+        var request = TestClientAccounts.CreateRequest(HttpMethod.Get, $"/api/v1/{account.ClientId}/business", account.AccessToken);
+        request.Headers.Add("Origin", RagAuthApiFactory.FrontendOrigin);
+
+        var response = await _httpClient.SendAsync(request);
+
+        await ApiEnvelopeAssertions.AssertSuccessAsync(response, HttpStatusCode.OK);
         Assert.Equal(RagAuthApiFactory.FrontendOrigin, ReadHeader(response, AllowOriginHeader));
     }
 

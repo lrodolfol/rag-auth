@@ -4,10 +4,12 @@ using Moq;
 using RagAuth.Api.Contracts;
 using RagAuth.Api.Contracts.Auth;
 using RagAuth.Api.Contracts.Business;
+using RagAuth.Api.Contracts.Dashboard;
 using RagAuth.Api.Endpoints;
 using RagAuth.Api.Services.Auth;
 using RagAuth.Api.Services.Business;
 using RagAuth.Api.Services.Clients;
+using RagAuth.Api.Services.Dashboard;
 
 namespace RagAuth.UnitTests.Endpoints;
 
@@ -43,6 +45,21 @@ public sealed class EndpointHandlersTests
         var result = await AuthEndpoints.LoginAsync(request, _authService.Object, CancellationToken.None);
 
         AssertEnvelope(result, StatusCodes.Status200OK, "Login realizado com sucesso.", login);
+    }
+
+    [Fact]
+    public async Task GetDashboardReturnsOkEnvelopeWithServiceMessageAndData()
+    {
+        var dashboardService = new Mock<IBusinessDashboardService>();
+        var dashboard = new BusinessDashboardResponse(
+            new ClientSummaryResponse(42, "Ana", "ana@exemplo.com", true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            Business);
+        dashboardService.Setup(service => service.GetDashboardAsync(42, CancellationToken.None))
+            .ReturnsAsync(new BusinessDashboardResult("Negócio encontrado com sucesso.", dashboard));
+
+        var result = await BusinessEndpoints.GetDashboardAsync(42, dashboardService.Object, CancellationToken.None);
+
+        AssertEnvelope(result, StatusCodes.Status200OK, "Negócio encontrado com sucesso.", dashboard);
     }
 
     [Fact]

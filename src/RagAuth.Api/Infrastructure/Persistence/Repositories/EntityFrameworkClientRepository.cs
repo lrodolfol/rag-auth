@@ -21,6 +21,12 @@ public sealed class EntityFrameworkClientRepository(AppDbContext databaseContext
     public Task<Client?> FindActiveByIdAsync(int clientId, CancellationToken cancellationToken = default) =>
         databaseContext.Clients.FirstOrDefaultAsync(client => client.Id == clientId, cancellationToken);
 
+    public Task<Client?> FindConfirmedWithBusinessByIdAsync(int clientId, CancellationToken cancellationToken = default) =>
+        databaseContext.Clients
+            .AsNoTracking()
+            .Include(client => client.Business)
+            .FirstOrDefaultAsync(client => client.Id == clientId && client.EmailConfirmed, cancellationToken);
+
     public Task LockForUpdateAsync(int clientId, CancellationToken cancellationToken = default) =>
         databaseContext.Database.ExecuteSqlAsync($"SELECT 1 FROM clients WHERE id = {clientId} FOR UPDATE", cancellationToken);
 

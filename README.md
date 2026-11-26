@@ -27,6 +27,7 @@ Recuperação de senha: [`specs/003-password-recovery/`](specs/003-password-reco
 | `POST` | `/api/v1/client/new-pass-recuvery-request` (`{ "email": "..." }`; pede a recuperação de senha, resposta sempre 202) | não |
 | `GET` | `/api/v1/client/{selector}/pass-recuvery/{validator}` (verifica o link de recuperação sem consumi-lo) | não |
 | `PUT` | `/api/v1/client/{selector}/pass-recuvery/{validator}` (`{ "newPassword", "newPasswordConfirmation" }`; troca a senha, sem login automático) | não |
+| `GET` | `/api/v1/{clientId}/business` (dados do painel: `{ client, business }`; 200 com `business: null` e mensagem de orientação se não há negócio; 401 sem token válido; 403 para outro cliente) | sim, `{clientId}` = claim `client_id` |
 | `POST` / `PUT` / `DELETE` | `/api/v1/{clientId}/business` | sim, `{clientId}` = claim `client_id` |
 | `DELETE` | `/api/v1/{clientId}` (remove a própria conta) | sim, `{clientId}` = claim `client_id` |
 
