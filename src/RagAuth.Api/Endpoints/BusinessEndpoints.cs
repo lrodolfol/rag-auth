@@ -2,6 +2,7 @@ using RagAuth.Api.Contracts;
 using RagAuth.Api.Contracts.Business;
 using RagAuth.Api.Security;
 using RagAuth.Api.Services.Business;
+using RagAuth.Api.Services.Dashboard;
 
 namespace RagAuth.Api.Endpoints;
 
@@ -11,10 +12,21 @@ public static class BusinessEndpoints
     {
         var businessGroup = endpoints.MapGroup("/api/v1/{clientId}/business")
             .RequireAuthorization(AuthorizationPolicies.ClientRouteOwner);
+        businessGroup.MapGet(string.Empty, GetDashboardAsync);
         businessGroup.MapPost(string.Empty, CreateAsync);
         businessGroup.MapPut(string.Empty, UpdateAsync);
         businessGroup.MapDelete(string.Empty, DeleteAsync);
         return endpoints;
+    }
+
+    internal static async Task<IResult> GetDashboardAsync(
+        int clientId,
+        IBusinessDashboardService dashboardService,
+        CancellationToken cancellationToken)
+    {
+        var result = await dashboardService.GetDashboardAsync(clientId, cancellationToken);
+        var response = ApiResponse.Succeeded(StatusCodes.Status200OK, result.Message, result.Dashboard);
+        return TypedResults.Json(response, statusCode: StatusCodes.Status200OK);
     }
 
     internal static async Task<IResult> CreateAsync(

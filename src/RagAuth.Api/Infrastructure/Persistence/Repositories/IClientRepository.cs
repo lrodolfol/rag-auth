@@ -13,6 +13,9 @@ public interface IClientRepository
 
     Task<Client?> FindActiveByIdAsync(int clientId, CancellationToken cancellationToken = default);
 
+    /// <summary>Cliente ativo com e-mail confirmado, já com o negócio carregado (LEFT JOIN), sem rastreamento.</summary>
+    Task<Client?> FindConfirmedWithBusinessByIdAsync(int clientId, CancellationToken cancellationToken = default);
+
     /// <summary>Bloqueia a linha do cliente até o fim da transação atual (serializa emissões concorrentes).</summary>
     Task LockForUpdateAsync(int clientId, CancellationToken cancellationToken = default);
 
