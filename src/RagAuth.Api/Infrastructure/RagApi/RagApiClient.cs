@@ -17,7 +17,7 @@ public sealed class RagApiClient(
         SendAsync(RagApiOperations.CreateBusiness, HttpMethod.Post, CreateBusinessBody(accessCode, businessData), cancellationToken);
 
     public Task UpdateBusinessAsync(string accessCode, NormalizedBusinessData businessData, CancellationToken cancellationToken = default) =>
-        SendAsync(RagApiOperations.UpdateBusiness, HttpMethod.Put, CreateBusinessBody(accessCode, businessData), cancellationToken);
+        SendAsync(RagApiOperations.UpdateBusiness, HttpMethod.Post, CreateBusinessBody(accessCode, businessData), cancellationToken);
 
     public Task DeleteBusinessAsync(string accessCode, CancellationToken cancellationToken = default) =>
         SendAsync(RagApiOperations.DeleteBusiness, HttpMethod.Delete, new RagBusinessDeletionRequest(accessCode), cancellationToken);
