@@ -21,7 +21,7 @@ public sealed class EndpointHandlersTests
     private readonly Mock<IAuthService> _authService = new();
     private readonly Mock<IBusinessService> _businessService = new();
     private readonly Mock<IClientAccountService> _clientAccountService = new();
-    private readonly BusinessRequest _businessRequest = new() { Name = "Padaria", Description = "Pães" };
+    private readonly BusinessRequest _businessRequest = new() { Name = "Padaria", descricao = "Pães" };
 
     [Fact]
     public async Task RegisterReturnsCreatedEnvelope()

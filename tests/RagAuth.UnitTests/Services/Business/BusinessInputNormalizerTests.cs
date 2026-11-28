@@ -13,11 +13,11 @@ public sealed class BusinessInputNormalizerTests
         var request = new BusinessRequest
         {
             Name = "  Padaria da Ana ",
-            Description = " Pães artesanais. ",
+            descricao = " Pães artesanais. ",
             Email = " contato@padaria.com ",
             Telephone = "(11) 98765-4321",
             Address = " Rua das Flores, 123 ",
-            Details = " Aberto todos os dias. ",
+            Detalhes = " Aberto todos os dias. ",
         };
 
         var normalized = _normalizer.Normalize(request);
@@ -36,11 +36,11 @@ public sealed class BusinessInputNormalizerTests
         var request = new BusinessRequest
         {
             Name = "Padaria",
-            Description = "Pães",
+            descricao = "Pães",
             Email = emptyValue,
             Telephone = emptyValue,
             Address = emptyValue,
-            Details = emptyValue,
+            Detalhes = emptyValue,
         };
 
         var normalized = _normalizer.Normalize(request);

@@ -96,10 +96,10 @@ public sealed class BusinessService(
     private static void ApplyBusinessData(BusinessEntity business, NormalizedBusinessData businessData)
     {
         business.Name = businessData.Name;
-        business.Description = businessData.Description;
+        business.Description = businessData.Descricao;
         business.Email = businessData.Email;
         business.Telephone = businessData.Telephone;
         business.Address = businessData.Address;
-        business.Details = businessData.Details;
+        business.Details = businessData.detalhes;
     }
 }

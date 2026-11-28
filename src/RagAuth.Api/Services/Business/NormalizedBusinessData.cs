@@ -2,8 +2,8 @@ namespace RagAuth.Api.Services.Business;
 
 public sealed record NormalizedBusinessData(
     string Name,
-    string Description,
+    string Descricao,
     string? Email,
     string? Telephone,
     string? Address,
-    string? Details);
+    string? detalhes);

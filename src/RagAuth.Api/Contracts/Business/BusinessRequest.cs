@@ -11,7 +11,7 @@ public sealed class BusinessRequest
 
     [Required(ErrorMessage = "Informe a descrição do negócio.")]
     [MaxLength(1000, ErrorMessage = "A descrição deve ter no máximo 1.000 caracteres.")]
-    public string Description { get; init; } = string.Empty;
+    public string descricao { get; init; } = string.Empty;
 
     [EmailAddress(ErrorMessage = "Informe um e-mail válido.")]
     [MaxLength(254, ErrorMessage = "O e-mail deve ter no máximo 254 caracteres.")]
@@ -25,5 +25,5 @@ public sealed class BusinessRequest
     public string? Address { get; init; }
 
     [MaxLength(2000, ErrorMessage = "Os detalhes devem ter no máximo 2.000 caracteres.")]
-    public string? Details { get; init; }
+    public string? Detalhes { get; init; }
 }

@@ -27,16 +27,17 @@ public sealed class RagApiClient(
             accessCode,
             new RagBusinessData(
                 businessData.Name,
-                businessData.Description,
+                businessData.Descricao,
                 businessData.Email,
                 businessData.Telephone,
                 businessData.Address,
-                businessData.Details));
+                businessData.detalhes));
 
     private async Task SendAsync<TBody>(string operation, HttpMethod method, TBody body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, ragApiOptions.Value.BusinessPath) { Content = JsonContent.Create(body) };
         await request.Content.LoadIntoBufferAsync(cancellationToken);
+        Console.WriteLine($"[RagApi] {operation} {method} payload: {await request.Content.ReadAsStringAsync(cancellationToken)}");
         using var response = await SendTranslatingTransportFailuresAsync(operation, request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {

@@ -22,7 +22,7 @@ public sealed class BusinessServiceCompensationTests
     private readonly Mock<IRagApiClient> _ragApiClient = new();
     private readonly Mock<ILogger<RagSynchronizedTransaction>> _logger = LoggerMocks.Create<RagSynchronizedTransaction>();
     private readonly UnitOfWorkMocks _unitOfWork = new();
-    private readonly BusinessRequest _request = new() { Name = "Padaria", Description = "Pães" };
+    private readonly BusinessRequest _request = new() { Name = "Padaria", descricao = "Pães" };
 
     public BusinessServiceCompensationTests()
     {

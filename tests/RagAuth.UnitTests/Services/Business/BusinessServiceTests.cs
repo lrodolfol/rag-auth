@@ -21,7 +21,7 @@ public sealed class BusinessServiceTests
     private readonly Mock<IClientRepository> _clientRepository = new();
     private readonly Mock<IRagApiClient> _ragApiClient = new();
     private readonly UnitOfWorkMocks _unitOfWork = new();
-    private readonly BusinessRequest _request = new() { Name = " Padaria ", Description = "Pães", Telephone = "(11) 98765-4321" };
+    private readonly BusinessRequest _request = new() { Name = " Padaria ", descricao = "Pães", Telephone = "(11) 98765-4321" };
 
     public BusinessServiceTests()
     {

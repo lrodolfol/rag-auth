@@ -8,8 +8,8 @@ public sealed record RagBusinessRequest(
 
 public sealed record RagBusinessData(
     [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("description")] string Description,
+    [property: JsonPropertyName("descricao")] string Description,
     [property: JsonPropertyName("email")] string? Email,
     [property: JsonPropertyName("telephone")] string? Telephone,
     [property: JsonPropertyName("address")] string? Address,
-    [property: JsonPropertyName("details")] string? Details);
+    [property: JsonPropertyName("detalhes")] string? Details);

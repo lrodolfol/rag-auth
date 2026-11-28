@@ -12,11 +12,11 @@ public sealed class BusinessInputNormalizer : IBusinessInputNormalizer
     public NormalizedBusinessData Normalize(BusinessRequest request) =>
         new(
             request.Name.Trim(),
-            request.Description.Trim(),
+            request.descricao.Trim(),
             NormalizeOptionalText(request.Email),
             NormalizeTelephone(request.Telephone),
             NormalizeOptionalText(request.Address),
-            NormalizeOptionalText(request.Details));
+            NormalizeOptionalText(request.Detalhes));
 
     private static string? NormalizeOptionalText(string? text) =>
         string.IsNullOrWhiteSpace(text) ? null : text.Trim();
